@@ -20,7 +20,7 @@ char *file_to_string(char *filename) {
 	u64 length = ftell(file);
 	fseek(file, 0, SEEK_SET);
 
-	char *file_string = malloc(length + 1);
+	char *file_string = (char *)malloc(length + 1);
 	fread(file_string, 1, length, file);
 	file_string[length] = 0;
 

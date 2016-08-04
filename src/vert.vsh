@@ -1,11 +1,20 @@
 #version 150
-in vec2 coords;
+
+in vec3 coords;
+in vec3 normals;
+in vec2 tex_coords;
+
+out vec2 f_tex_coords;
+out vec3 f_normals;
+
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 perspective;
 
 void main() {
-	float ratio = 1.33333;
-    mat4 scale = mat4(vec4(0.5 / ratio, 0.0, 0.0, 0.0),
-					  vec4(0.0, 0.5, 0.0, 0.0),
-					  vec4(0.0, 0.0, 1.0, 0.0),
-					  vec4(0.0, 0.0, 0.0, 1.0));
-	gl_Position = scale * vec4(coords, 0.0, 1.0);
+	mat4 mvp = perspective * view * model;
+
+	gl_Position = mvp * vec4(coords, 1.0);
+	f_tex_coords = tex_coords;
+	f_normals = mat3(transpose(inverse(mat3(model)))) * normals;
 }

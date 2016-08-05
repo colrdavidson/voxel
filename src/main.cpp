@@ -10,7 +10,6 @@
 #include "common.h"
 #include "point.h"
 #include "cube.h"
-#include "simple_map.h"
 
 void get_shader_err(GLuint shader) {
 	GLint err_log_max_length = 0;
@@ -152,16 +151,22 @@ int main() {
 	glGenTextures(1, &wall_tex);
 	glBindTexture(GL_TEXTURE_2D, wall_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glGenerateMipmap(GL_TEXTURE_2D);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wall_surf->w, wall_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wall_surf->pixels);
 
 	glGenTextures(1, &wood_tex);
 	glBindTexture(GL_TEXTURE_2D, wood_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glGenerateMipmap(GL_TEXTURE_2D);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wood_surf->w, wood_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wood_surf->pixels);
 
 	glGenTextures(1, &grass_tex);
 	glBindTexture(GL_TEXTURE_2D, grass_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glGenerateMipmap(GL_TEXTURE_2D);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, grass_surf->w, grass_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, grass_surf->pixels);
 
 	SDL_FreeSurface(wall_surf);
@@ -224,7 +229,7 @@ int main() {
 	while (running) {
     	SDL_Event event;
 
-		f32 cam_speed = 0.05;
+		f32 cam_speed = 0.15;
 		SDL_PumpEvents();
 		const u8 *state = SDL_GetKeyboardState(NULL);
 		if (state[SDL_SCANCODE_UP]) {
@@ -234,10 +239,10 @@ int main() {
 			cam_pos -= cam_speed * cam_front;
 		}
 		if (state[SDL_SCANCODE_LEFT]) {
-			cam_pos -= glm::normalize(glm::cross(cam_front, cam_up)) * cam_speed;
+			cam_pos -= glm::cross(cam_front, cam_up) * cam_speed;
 		}
 		if (state[SDL_SCANCODE_RIGHT]) {
-			cam_pos += glm::normalize(glm::cross(cam_front, cam_up)) * cam_speed;
+			cam_pos += glm::cross(cam_front, cam_up) * cam_speed;
 		}
 
 		while (SDL_PollEvent(&event)) {
@@ -261,14 +266,11 @@ int main() {
 #define PERSPECTIVE 0
 #if PERSPECTIVE
 		glm::mat4 perspective = glm::perspective(glm::radians(35.264f), ratio, 0.1f, 100.0f);
-		double dist = sqrt(480.0 / 3.0);
-		glm::mat4 view = glm::lookAt(glm::vec3(dist, dist, dist), cam_pos + cam_front, cam_up);
+		glm::mat4 view = glm::lookAt(glm::vec3(-10.0, 10.0, 0.0), cam_pos + cam_front, cam_up);
 #else
 		glm::mat4 perspective = glm::ortho(-2.0f, 2.0f, -2.0f, 2.0f, -100.0f, 100.0f);
 
 		glm::mat4 view = glm::mat4(1.0);
-		view = glm::translate(view, glm::vec3(cam_pos.x, cam_pos.z, cam_pos.y));
-		view = glm::scale(view, glm::vec3(1.0f / 14.0f, 1.0f / 14.0f, 1.0 / 14.0f));
 		view = glm::rotate(view, glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
 		switch (direction) {
@@ -288,6 +290,9 @@ int main() {
 				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 			}
 		}
+
+		view = glm::translate(view, glm::vec3(cam_pos.x, cam_pos.y, cam_pos.z));
+		view = glm::scale(view, glm::vec3(1.0f / 16.0f, 1.0f / 16.0f, 1.0 / 16.0f));
 
 #endif
 

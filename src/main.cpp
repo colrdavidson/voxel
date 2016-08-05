@@ -8,6 +8,9 @@
 #include <stdlib.h>
 
 #include "common.h"
+#include "point.h"
+#include "cube.h"
+#include "simple_map.h"
 
 void get_shader_err(GLuint shader) {
 	GLint err_log_max_length = 0;
@@ -61,6 +64,69 @@ GLuint load_and_build_program(char *vert_filename, char *frag_filename) {
 	return shader_program;
 }
 
+u8 *load_map(char *map_file) {
+	FILE *fp = fopen("assets/house_map", "r");
+	char *line = (char *)malloc(256);
+
+	fgets(line, 256, fp);
+
+	u32 map_width = atoi(strtok(line, " "));
+	u32 map_height = atoi(strtok(NULL, " "));
+	u32 map_depth = atoi(strtok(NULL, " "));
+	u64 map_size = map_width * map_height * map_depth;
+
+	printf("map_size: %lu\n", map_size);
+	u8 *map = (u8 *)malloc(map_size * sizeof(u8));
+	memset(map, 0, map_size);
+
+	fgets(line, 256, fp);
+	fgets(line, 256, fp);
+
+	u32 tile_entries = atoi(line) + 3;
+	for (u32 i = 1; i < tile_entries - 2; i++) {
+		fgets(line, 256, fp);
+	}
+
+	fgets(line, 256, fp);
+	fgets(line, 256, fp);
+
+	char *line_start = line;
+	char *rest;
+	for (u32 z = 0; z < map_depth; z++) {
+		for (u32 y = 0; y < map_height; y++) {
+			bool new_line = true;
+			for (u32 x = 0; x < map_width; x++) {
+				char *bit;
+
+				if (new_line) {
+					bit = strtok_r(line_start, " ", &rest);
+					new_line = false;
+				} else {
+					bit = strtok_r(NULL, " ", &rest);
+				}
+
+				u32 tile_id = atoi(bit);
+				map[threed_to_oned(x, y, z, map_width, map_height)] = tile_id;
+			}
+			fgets(line, 256, fp);
+		}
+		fgets(line, 256, fp);
+	}
+
+	/*for (u32 z = 0; z < map_depth; z++) {
+		for (u32 y = 0; y < map_height; y++) {
+			for (u32 x = 0; x < map_width; x++) {
+				printf("%d ", map[threed_to_oned(x, y, z, map_width, map_height)]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+	}*/
+
+	fclose(fp);
+	return map;
+}
+
 int main() {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -75,148 +141,38 @@ int main() {
 
 	GLuint shader_program = load_and_build_program("src/vert.vsh", "src/frag.fsh");
 
+	GLuint wall_tex = 0;
 	GLuint wood_tex = 0;
-	SDL_Surface *wood_surf = IMG_Load("wood.png");
+	GLuint grass_tex = 0;
+
+	SDL_Surface *wall_surf = IMG_Load("assets/wall.png");
+	SDL_Surface *wood_surf = IMG_Load("assets/wood.png");
+	SDL_Surface *grass_surf = IMG_Load("assets/grass.png");
+
+	glGenTextures(1, &wall_tex);
+	glBindTexture(GL_TEXTURE_2D, wall_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wall_surf->w, wall_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wall_surf->pixels);
+
 	glGenTextures(1, &wood_tex);
 	glBindTexture(GL_TEXTURE_2D, wood_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wood_surf->w, wood_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wood_surf->pixels);
+
+	glGenTextures(1, &grass_tex);
+	glBindTexture(GL_TEXTURE_2D, grass_tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, grass_surf->w, grass_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, grass_surf->pixels);
+
+	SDL_FreeSurface(wall_surf);
 	SDL_FreeSurface(wood_surf);
+	SDL_FreeSurface(grass_surf);
 
 	GLuint vao = 0;
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
 	f32 ratio = 640.0 / 480.0;
-
-	GLfloat cube_points[] = {
-		// front
-		-1.0, -1.0,  1.0,
-		1.0, -1.0,  1.0,
-		1.0,  1.0,  1.0,
-		-1.0,  1.0,  1.0,
-		// top
-		-1.0,  1.0,  1.0,
-		1.0,  1.0,  1.0,
-		1.0,  1.0, -1.0,
-		-1.0,  1.0, -1.0,
-		// back
-		1.0, -1.0, -1.0,
-		-1.0, -1.0, -1.0,
-		-1.0,  1.0, -1.0,
-		1.0,  1.0, -1.0,
-		// bottom
-		-1.0, -1.0, -1.0,
-		1.0, -1.0, -1.0,
-		1.0, -1.0,  1.0,
-		-1.0, -1.0,  1.0,
-		// left
-		-1.0, -1.0, -1.0,
-		-1.0, -1.0,  1.0,
-		-1.0,  1.0,  1.0,
-		-1.0,  1.0, -1.0,
-		// right
-		1.0, -1.0,  1.0,
-		1.0, -1.0, -1.0,
-		1.0,  1.0, -1.0,
-		1.0,  1.0,  1.0,
-	};
-
-	GLfloat cube_normals[] = {
-		// front
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-		0.0, 0.0, 1.0,
-
-		// top
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-		0.0, 1.0, 0.0,
-
-		// back
-		0.0, 0.0, -1.0,
-		0.0, 0.0, -1.0,
-		0.0, 0.0, -1.0,
-		0.0, 0.0, -1.0,
-
-		// bottom
-		0.0, -1.0, 0.0,
-		0.0, -1.0, 0.0,
-		0.0, -1.0, 0.0,
-		0.0, -1.0, 0.0,
-
-		// left
-		-1.0, 0.0, 0.0,
-		-1.0, 0.0, 0.0,
-		-1.0, 0.0, 0.0,
-		-1.0, 0.0, 0.0,
-
-		// right
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-		1.0, 0.0, 0.0,
-	};
-
-	GLfloat cube_tex_coords[] = {
-		// front
-		0.0, 0.0,
-		0.5, 0.0,
-		0.5, 1.0,
-		0.0, 1.0,
-
-		// top
-		0.5, 0.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		0.5, 1.0,
-
-		// back
-		0.0, 0.0,
-		0.5, 0.0,
-		0.5, 1.0,
-		0.0, 1.0,
-
-		// bottom
-		0.5, 0.0,
-		1.0, 0.0,
-		1.0, 1.0,
-		0.5, 1.0,
-
-		// left
-		0.0, 0.0,
-		0.5, 0.0,
-		0.5, 1.0,
-		0.0, 1.0,
-
-		// right
-		0.0, 0.0,
-		0.5, 0.0,
-		0.5, 1.0,
-		0.0, 1.0,
-	};
-
-	GLushort cube_indices[] = {
-		0, 1, 2,
-		2, 3, 0,
-
-		4, 5, 6,
-		6, 7, 4,
-
-		8, 9, 10,
-		10, 11, 8,
-
-		12, 13, 14,
-		14, 15, 12,
-
-		16, 17, 18,
-		18, 19, 16,
-
-		20, 21, 22,
-		22, 23, 20,
-	};
 
 	GLuint vbo_cube_points = 0;
 	GLuint vbo_cube_tex_coords = 0;
@@ -260,6 +216,10 @@ int main() {
 	glm::vec3 cam_front = glm::vec3(0.0, 0.0, -1.0);
 	glm::vec3 cam_up = glm::vec3(0.0, 1.0, 0.0);
 
+	puts("here");
+	u8 *map = load_map("assets/house_map");
+	Direction direction = NORTH;
+
 	u8 running = 1;
 	while (running) {
     	SDL_Event event;
@@ -283,6 +243,14 @@ int main() {
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 				case SDL_KEYDOWN: {
+					switch (event.key.keysym.sym) {
+						case SDLK_e: {
+							direction = cycle_right(direction);
+						} break;
+						case SDLK_q: {
+							direction = cycle_left(direction);
+						} break;
+					}
 				} break;
 				case SDL_QUIT: {
 					running = 0;
@@ -302,7 +270,25 @@ int main() {
 		view = glm::translate(view, glm::vec3(cam_pos.x, cam_pos.z, cam_pos.y));
 		view = glm::scale(view, glm::vec3(1.0f / 14.0f, 1.0f / 14.0f, 1.0 / 14.0f));
 		view = glm::rotate(view, glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-		view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+
+		switch (direction) {
+			case NORTH: {
+				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	  		} break;
+			case SOUTH: {
+				view = glm::rotate(view, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	  		} break;
+			case WEST: {
+				view = glm::rotate(view, glm::radians(-135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	  		} break;
+			case EAST: {
+				view = glm::rotate(view, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+	  		} break;
+			default: {
+				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+			}
+		}
+
 #endif
 
 		glClearColor(0.0, 0.0, 0.0, 1.0);
@@ -311,10 +297,6 @@ int main() {
 
 		glUniformMatrix4fv(view_uniform, 1, GL_FALSE, &view[0][0]);
 		glUniformMatrix4fv(perspective_uniform, 1, GL_FALSE, &perspective[0][0]);
-
-		glActiveTexture(GL_TEXTURE0);
-		glUniform1i(tex_uniform, 0);
-		glBindTexture(GL_TEXTURE_2D, wood_tex);
 
 		glEnableVertexAttribArray(points_attr);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
@@ -333,9 +315,35 @@ int main() {
 		glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
 
 		glm::mat4 start_model = glm::mat4(1.0);
-		for (u32 x = 0; x < 20; x++) {
-			for (u32 y = 0; y < 20; y++) {
-				glm::mat4 model = glm::translate(start_model, glm::vec3((f32)x * 2.0f, 0.0f, (f32)y * 2.0));
+
+		u8 map_width = 20;
+		u8 map_height = 20;
+		u8 map_depth = 4;
+
+		for (u32 i = 0; i < map_width * map_height * map_depth; i++) {
+			u32 tile_id = map[i];
+			if (tile_id != 0) {
+				glActiveTexture(GL_TEXTURE0);
+				glUniform1i(tex_uniform, 0);
+
+				switch (tile_id) {
+					case 1: {
+						glBindTexture(GL_TEXTURE_2D, wall_tex);
+					} break;
+					case 2: {
+						glBindTexture(GL_TEXTURE_2D, grass_tex);
+					} break;
+					case 4: {
+						glBindTexture(GL_TEXTURE_2D, wood_tex);
+					} break;
+					default: {
+						glBindTexture(GL_TEXTURE_2D, wall_tex);
+					} break;
+				}
+
+				Point p = oned_to_threed(i, map_width, map_height);
+
+				glm::mat4 model = glm::translate(start_model, glm::vec3((f32)p.x * 2.0f, (f32)p.z * 2.0f, (f32)p.y * 2.0f));
 				glUniformMatrix4fv(cube_model_uniform, 1, GL_FALSE, &model[0][0]);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}

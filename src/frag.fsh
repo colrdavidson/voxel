@@ -16,5 +16,11 @@ void main() {
 	vec4 diffuse = diff * light_color;
 
 	vec2 flipped_tex_coords = vec2(f_tex_coords.x, 1.0 - f_tex_coords.y);
-	color = (ambient + diffuse) * texture(tex, flipped_tex_coords);
+	vec4 tmp_color = (ambient + diffuse) * texture(tex, flipped_tex_coords);
+
+	if (tmp_color.a < 0.5) {
+		discard;
+	}
+
+	color = tmp_color;
 }

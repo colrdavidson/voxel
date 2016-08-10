@@ -17,7 +17,7 @@ typedef struct Attribs {
 	GLuint normals_attr;
 } Attribs;
 
-Attribs *init_attribs(GLuint shader_program, char *s_points_attr, char *s_texpos_attr, char *s_normals_attr) {
+Attribs *init_attribs(GLuint shader_program, const char *s_points_attr, const char *s_texpos_attr, const char *s_normals_attr) {
 	Attribs *a = (Attribs *)malloc(sizeof(Attribs));
 
 	a->points_attr = glGetAttribLocation(shader_program, s_points_attr);
@@ -71,7 +71,7 @@ GLint build_shader(const char *file_string, GLenum shader_type) {
 	return shader;
 }
 
-GLuint load_and_build_program(char *vert_filename, char *frag_filename) {
+GLuint load_and_build_program(const char *vert_filename, const char *frag_filename) {
 	GLuint shader_program = glCreateProgram();
 
 	char *vert_file = file_to_string(vert_filename);
@@ -91,7 +91,7 @@ GLuint load_and_build_program(char *vert_filename, char *frag_filename) {
 	return shader_program;
 }
 
-u8 *load_map(char *map_file) {
+u8 *load_map(const char *map_file) {
 	FILE *fp = fopen("assets/house_map", "r");
 	char *line = (char *)malloc(256);
 
@@ -154,7 +154,7 @@ u8 *load_map(char *map_file) {
 	return map;
 }
 
-GLuint build_texture(char *tex_filename) {
+GLuint build_texture(const char *tex_filename) {
 	GLuint tex;
 
 	SDL_Surface *surf = IMG_Load(tex_filename);

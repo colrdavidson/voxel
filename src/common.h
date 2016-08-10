@@ -13,7 +13,7 @@ typedef float f32;
 typedef double f64;
 
 // Allocates a string, must be freed by user
-char *file_to_string(char *filename) {
+char *file_to_string(const char *filename) {
 	FILE *file = fopen(filename, "r");
 
 	fseek(file, 0, SEEK_END);

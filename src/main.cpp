@@ -11,6 +11,34 @@
 #include "point.h"
 #include "cube.h"
 
+typedef struct Attribs {
+	GLuint points_attr;
+	GLuint texpos_attr;
+	GLuint normals_attr;
+} Attribs;
+
+Attribs *init_attribs(GLuint shader_program, char *s_points_attr, char *s_texpos_attr, char *s_normals_attr) {
+	Attribs *a = (Attribs *)malloc(sizeof(Attribs));
+
+	a->points_attr = glGetAttribLocation(shader_program, s_points_attr);
+	a->texpos_attr = glGetAttribLocation(shader_program, s_texpos_attr);
+	a->normals_attr = glGetAttribLocation(shader_program, s_normals_attr);
+
+	return a;
+}
+
+void enable_attribs(Attribs *attribs) {
+	glEnableVertexAttribArray(attribs->points_attr);
+	glEnableVertexAttribArray(attribs->texpos_attr);
+	glEnableVertexAttribArray(attribs->normals_attr);
+}
+
+void disable_attribs(Attribs *attribs) {
+	glDisableVertexAttribArray(attribs->points_attr);
+	glDisableVertexAttribArray(attribs->normals_attr);
+	glDisableVertexAttribArray(attribs->texpos_attr);
+}
+
 void get_shader_err(GLuint shader) {
 	GLint err_log_max_length = 0;
 	glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &err_log_max_length);
@@ -126,6 +154,57 @@ u8 *load_map(char *map_file) {
 	return map;
 }
 
+GLuint build_texture(char *tex_filename) {
+	GLuint tex;
+
+	SDL_Surface *surf = IMG_Load(tex_filename);
+
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surf->w, surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, surf->pixels);
+
+	SDL_FreeSurface(surf);
+	return tex;
+}
+
+GLuint build_vbo(GLfloat *arr, u64 size) {
+	GLuint vbo = 0;
+
+	glGenBuffers(1, &vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, size, arr, GL_STATIC_DRAW);
+
+	return vbo;
+}
+
+GLuint build_ibo(GLushort *arr, u64 size) {
+	GLuint ibo = 0;
+
+	glGenBuffers(1, &ibo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, arr, GL_STATIC_DRAW);
+
+	return ibo;
+}
+
+void setup_object(Attribs *attribs, GLuint points, GLuint tex, GLuint normals, GLuint tex_coords, GLuint indices, i32 *size) {
+	glBindBuffer(GL_ARRAY_BUFFER, points);
+	glVertexAttribPointer(attribs->points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glBindTexture(GL_TEXTURE_2D, tex);
+
+	glBindBuffer(GL_ARRAY_BUFFER, normals);
+	glVertexAttribPointer(attribs->normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, tex_coords);
+	glVertexAttribPointer(attribs->texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices);
+	glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, size);
+}
+
 int main() {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -138,80 +217,18 @@ int main() {
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_SetSwapInterval(1);
 
+	printf("GL version: %s\n", glGetString(GL_VERSION));
+    printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+
 	GLuint shader_program = load_and_build_program("src/vert.vsh", "src/frag.fsh");
 
-	GLuint wall_tex = 0;
-	GLuint roof_tex = 0;
-	GLuint ladder_tex = 0;
-	GLuint door_tex = 0;
-	GLuint tree_tex = 0;
-	GLuint wood_tex = 0;
-	GLuint grass_tex = 0;
-
-	SDL_Surface *wall_surf = IMG_Load("assets/wall.png");
-	SDL_Surface *roof_surf = IMG_Load("assets/roof.png");
-	SDL_Surface *door_surf = IMG_Load("assets/door.png");
-	SDL_Surface *tree_surf = IMG_Load("assets/tree.png");
-	SDL_Surface *wood_surf = IMG_Load("assets/wood.png");
-	SDL_Surface *ladder_surf = IMG_Load("assets/ladder.png");
-	SDL_Surface *grass_surf = IMG_Load("assets/grass.png");
-
-	glGenTextures(1, &wall_tex);
-	glBindTexture(GL_TEXTURE_2D, wall_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wall_surf->w, wall_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wall_surf->pixels);
-
-	glGenTextures(1, &roof_tex);
-	glBindTexture(GL_TEXTURE_2D, roof_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, roof_surf->w, roof_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, roof_surf->pixels);
-
-	glGenTextures(1, &door_tex);
-	glBindTexture(GL_TEXTURE_2D, door_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, door_surf->w, door_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, door_surf->pixels);
-
-	glGenTextures(1, &tree_tex);
-	glBindTexture(GL_TEXTURE_2D, tree_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tree_surf->w, tree_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, tree_surf->pixels);
-
-	glGenTextures(1, &wood_tex);
-	glBindTexture(GL_TEXTURE_2D, wood_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wood_surf->w, wood_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wood_surf->pixels);
-
-	glGenTextures(1, &ladder_tex);
-	glBindTexture(GL_TEXTURE_2D, ladder_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ladder_surf->w, ladder_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, ladder_surf->pixels);
-
-	glGenTextures(1, &grass_tex);
-	glBindTexture(GL_TEXTURE_2D, grass_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, grass_surf->w, grass_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, grass_surf->pixels);
-
-	SDL_FreeSurface(wall_surf);
-	SDL_FreeSurface(roof_surf);
-	SDL_FreeSurface(door_surf);
-	SDL_FreeSurface(tree_surf);
-	SDL_FreeSurface(wood_surf);
-	SDL_FreeSurface(ladder_surf);
-	SDL_FreeSurface(grass_surf);
+	GLuint wall_tex = build_texture("assets/wall.png");
+	GLuint roof_tex = build_texture("assets/roof.png");
+	GLuint ladder_tex = build_texture("assets/ladder.png");
+	GLuint door_tex = build_texture("assets/door.png");
+	GLuint tree_tex = build_texture("assets/tree.png");
+	GLuint wood_tex = build_texture("assets/wood.png");
+	GLuint grass_tex = build_texture("assets/grass.png");
 
 	GLuint vao = 0;
 	glGenVertexArrays(1, &vao);
@@ -219,71 +236,26 @@ int main() {
 
 	f32 ratio = 640.0 / 480.0;
 
-	GLuint vbo_cube_points = 0;
-	GLuint vbo_roof_points = 0;
-	GLuint vbo_door_points = 0;
-	GLuint vbo_tree_points = 0;
+	GLuint vbo_cube_points = build_vbo(cube_points, sizeof(cube_points));
+	GLuint vbo_roof_points = build_vbo(roof_points, sizeof(roof_points));
+	GLuint vbo_door_points = build_vbo(door_points, sizeof(door_points));
+	GLuint vbo_tree_points = build_vbo(tree_points, sizeof(tree_points));
 
-	GLuint vbo_cube_tex_coords = 0;
-	GLuint vbo_tree_tex_coords = 0;
+	GLuint vbo_cube_tex_coords = build_vbo(cube_tex_coords, sizeof(cube_tex_coords));
+	GLuint vbo_tree_tex_coords = build_vbo(tree_tex_coords, sizeof(tree_tex_coords));
 
-	GLuint vbo_cube_normals = 0;
-	GLuint vbo_tree_normals = 0;
+	GLuint vbo_cube_normals = build_vbo(cube_normals, sizeof(cube_normals));
+	GLuint vbo_tree_normals = build_vbo(tree_normals, sizeof(tree_normals));
 
-	GLuint ibo_cube_indices = 0;
-	GLuint ibo_tree_indices = 0;
+	GLuint ibo_cube_indices = build_ibo(cube_indices, sizeof(cube_indices));
+	GLuint ibo_tree_indices = build_ibo(tree_indices, sizeof(tree_indices));
 
-	glGenBuffers(1, &vbo_cube_points);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_points), cube_points, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_roof_points);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_roof_points);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(roof_points), roof_points, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_door_points);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_door_points);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(door_points), door_points, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_tree_points);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_tree_points);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(tree_points), tree_points, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_cube_tex_coords);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_tex_coords), cube_tex_coords, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_tree_tex_coords);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_tree_tex_coords);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(tree_tex_coords), tree_tex_coords, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_cube_normals);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_normals), cube_normals, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &vbo_tree_normals);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_tree_normals);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(tree_normals), tree_normals, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &ibo_cube_indices);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_indices), cube_indices, GL_STATIC_DRAW);
-
-	glGenBuffers(1, &ibo_tree_indices);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_tree_indices);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(tree_indices), tree_indices, GL_STATIC_DRAW);
-
-	GLuint points_attr = glGetAttribLocation(shader_program, "coords");
-	GLuint texpos_attr = glGetAttribLocation(shader_program, "tex_coords");
-	GLuint normals_attr = glGetAttribLocation(shader_program, "normals");
+	Attribs *attribs = init_attribs(shader_program, "coords", "tex_coords", "normals");
 
 	GLuint cube_model_uniform = glGetUniformLocation(shader_program, "model");
 	GLuint view_uniform = glGetUniformLocation(shader_program, "view");
 	GLuint perspective_uniform = glGetUniformLocation(shader_program, "perspective");
 	GLint tex_uniform = glGetUniformLocation(shader_program, "tex");
-
-	printf("GL version: %s\n", glGetString(GL_VERSION));
-    printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
 	glViewport(0, 0, 640, 480);
 	glEnable(GL_DEPTH_TEST);
@@ -385,9 +357,7 @@ int main() {
 		glUniformMatrix4fv(view_uniform, 1, GL_FALSE, &view[0][0]);
 		glUniformMatrix4fv(perspective_uniform, 1, GL_FALSE, &perspective[0][0]);
 
-		glEnableVertexAttribArray(points_attr);
-		glEnableVertexAttribArray(normals_attr);
-		glEnableVertexAttribArray(texpos_attr);
+		enable_attribs(attribs);
 
 		i32 size;
 		glm::mat4 start_model = glm::mat4(1.0);
@@ -404,102 +374,25 @@ int main() {
 
 				switch (tile_id) {
 					case 1: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, wall_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 2: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, grass_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 4: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, wood_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 5: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_door_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, door_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_door_points, door_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 6: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_roof_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, roof_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_roof_points, roof_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 7: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, ladder_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 8: {
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_tree_points);
-						glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-						glBindTexture(GL_TEXTURE_2D, tree_tex);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_tree_normals);
-						glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ARRAY_BUFFER, vbo_tree_tex_coords);
-						glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
-
-						glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_tree_indices);
-						glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+						setup_object(attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
 					} break;
 					default: {
 						continue;
@@ -514,9 +407,7 @@ int main() {
 			}
 		}
 
-		glDisableVertexAttribArray(points_attr);
-		glDisableVertexAttribArray(normals_attr);
-		glDisableVertexAttribArray(texpos_attr);
+		disable_attribs(attribs);
 
 		SDL_GL_SwapWindow(window);
 	}

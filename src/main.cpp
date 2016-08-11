@@ -249,12 +249,18 @@ int main() {
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480));
 
+	GLint color_index = glGetFragDataLocation(shader_program, "color");
+	GLint click_index = glGetFragDataLocation(shader_program, "click");
+
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
-	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));
-	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, click_buffer));
+	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + color_index, GL_RENDERBUFFER, render_buffer));
+	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1 + click_index, GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
 
-	GL_CHECK(glCheckFramebufferStatus(GL_FRAMEBUFFER));
+	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (status != GL_FRAMEBUFFER_COMPLETE) {
+		return 1;
+	}
 
 	GLuint wall_tex = build_texture("assets/wall.png");
 	GLuint roof_tex = build_texture("assets/roof.png");
@@ -289,7 +295,6 @@ int main() {
 	GLuint mvp_uniform = glGetUniformLocation(shader_program, "mvp");
 	GLuint tile_data_uniform = glGetUniformLocation(shader_program, "tile_data");
 	GLint tex_uniform = glGetUniformLocation(shader_program, "tex");
-	GLint color_index = glGetFragDataLocation(shader_program, "color");
 
 	glViewport(0, 0, 640, 480);
 	glEnable(GL_DEPTH_TEST);
@@ -441,10 +446,10 @@ int main() {
 			}
 		}
 
-		glReadBuffer(GL_COLOR_ATTACHMENT0 + color_index);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		GL_CHECK(glReadBuffer(GL_COLOR_ATTACHMENT0 + color_index));
+		GL_CHECK(glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer));
+		GL_CHECK(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0));
+		GL_CHECK(glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST));
 
 		disable_attribs(attribs);
 

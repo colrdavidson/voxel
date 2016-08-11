@@ -309,6 +309,9 @@ int main() {
 	glm::vec3 cam_up = glm::vec3(0.0, 1.0, 0.0);
 
 	u8 *map = load_map("assets/house_map");
+	u8 map_width = 20;
+	u8 map_height = 20;
+	u8 map_depth = 4;
 	Direction direction = NORTH;
 
 	f32 scale = 25.0f;
@@ -364,8 +367,10 @@ int main() {
                         i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(mouse_x, mouse_y, 1, 1, GL_RED, GL_INT, &data);
-						printf("%d, %d, %d\n", mouse_x, mouse_y, data);
+						glReadPixels(mouse_x, mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+
+						Point p = oned_to_threed(data, map_width, map_height);
+						printf("(%d, %d) -> (%d, %d, %d)\n", mouse_x, mouse_y, p.x, p.y, p.z);
 					}
 				} break;
 				case SDL_QUIT: {
@@ -416,9 +421,6 @@ int main() {
 		i32 size;
 		glm::mat4 start_model = glm::mat4(1.0);
 
-		u8 map_width = 20;
-		u8 map_height = 20;
-		u8 map_depth = 4;
 
 		for (u32 i = 0; i < map_width * map_height * map_depth; i++) {
 			u32 tile_id = map[i];
@@ -464,8 +466,8 @@ int main() {
 		}
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		disable_attribs(attribs);

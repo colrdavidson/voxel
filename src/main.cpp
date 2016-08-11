@@ -252,14 +252,15 @@ int main() {
 	GLint color_index = glGetFragDataLocation(shader_program, "color");
 	GLint click_index = glGetFragDataLocation(shader_program, "click");
 
+	GLenum buffers[2];
+	buffers[color_index] = GL_COLOR_ATTACHMENT0;
+	buffers[click_index] = GL_COLOR_ATTACHMENT1;
+
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
-
-	GLenum buffers[2];
-	buffers[color_index] = GL_COLOR_ATTACHMENT0;
-	buffers[click_index] = GL_COLOR_ATTACHMENT1;
+	GL_CHECK(glDrawBuffers(2, buffers));
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -355,6 +356,18 @@ int main() {
 						} break;
 					}
 				} break;
+				case SDL_MOUSEBUTTONDOWN: {
+					i32 mouse_x, mouse_y;
+					u32 buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
+
+					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+                        i32 data = 0;
+						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+						glReadBuffer(GL_COLOR_ATTACHMENT1);
+						glReadPixels(mouse_x, mouse_y, 1, 1, GL_RGBA_INTEGER, GL_INT, &data);
+						printf("%d, %d, %d\n", mouse_x, mouse_y, data);
+					}
+				} break;
 				case SDL_QUIT: {
 					running = 0;
 				} break;
@@ -394,7 +407,6 @@ int main() {
 		}
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
-		GL_CHECK(glDrawBuffers(2, buffers));
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glUseProgram(shader_program);
@@ -446,15 +458,15 @@ int main() {
 
 				glm::mat4 mvp = perspective * view * model;
 				glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
-				glUniform2f(tile_data_uniform, i, 0.0f);
+				glUniform2i(tile_data_uniform, i, 0);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
 		}
 
-		GL_CHECK(glReadBuffer(GL_COLOR_ATTACHMENT0));
-		GL_CHECK(glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer));
-		GL_CHECK(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0));
-		GL_CHECK(glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST));
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		disable_attribs(attribs);
 

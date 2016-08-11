@@ -11,7 +11,12 @@
 #include "point.h"
 #include "cube.h"
 
-#define GL_CHECK(x) do { x; GLenum err = glGetError(); assert(err == GL_NO_ERROR); } while(0)
+#define RELEASE 0
+#if RELEASE
+	#define GL_CHECK(x) x
+#else
+	#define GL_CHECK(x) do { x; GLenum err = glGetError(); assert(err == GL_NO_ERROR); } while(0)
+#endif
 
 typedef struct Attribs {
 	GLuint points_attr;
@@ -85,10 +90,10 @@ GLuint load_and_build_program(const char *vert_filename, const char *frag_filena
 	free(vert_file);
 	free(frag_file);
 
-	glAttachShader(shader_program, vert_shader);
-	glAttachShader(shader_program, frag_shader);
+	GL_CHECK(glAttachShader(shader_program, vert_shader));
+	GL_CHECK(glAttachShader(shader_program, frag_shader));
 
-	glLinkProgram(shader_program);
+	GL_CHECK(glLinkProgram(shader_program));
 
 	return shader_program;
 }
@@ -228,32 +233,28 @@ int main() {
     GLuint frame_buffer = 0;
     GLuint depth_buffer = 0;
 	GLuint render_buffer = 0;
+	GLuint click_buffer = 0;
 
-	glGenFramebuffers(1, &frame_buffer);
+	GL_CHECK(glGenFramebuffers(1, &frame_buffer));
 
-	glGenRenderbuffers(1, &depth_buffer);
-	glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480);
+	GL_CHECK(glGenRenderbuffers(1, &depth_buffer));
+	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480));
 
 	GL_CHECK(glGenRenderbuffers(1, &render_buffer));
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, render_buffer));
 	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480));
 
+	GL_CHECK(glGenRenderbuffers(1, &click_buffer));
+	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, click_buffer));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480));
+
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));
+	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
 
-	GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	if (!fb_status) {
-		GLenum err = glGetError();
-		printf("%d %x\n", err, err);
-		return 1;
-	}
-
-	if (fb_status != GL_FRAMEBUFFER_COMPLETE) {
-		printf("OH GOD, FB SADNESS\n");
-		return 1;
-	}
+	GL_CHECK(glCheckFramebufferStatus(GL_FRAMEBUFFER));
 
 	GLuint wall_tex = build_texture("assets/wall.png");
 	GLuint roof_tex = build_texture("assets/roof.png");
@@ -286,7 +287,9 @@ int main() {
 	Attribs *attribs = init_attribs(shader_program, "coords", "tex_coords", "normals");
 
 	GLuint mvp_uniform = glGetUniformLocation(shader_program, "mvp");
+	GLuint tile_data_uniform = glGetUniformLocation(shader_program, "tile_data");
 	GLint tex_uniform = glGetUniformLocation(shader_program, "tex");
+	GLint color_index = glGetFragDataLocation(shader_program, "color");
 
 	glViewport(0, 0, 640, 480);
 	glEnable(GL_DEPTH_TEST);
@@ -433,11 +436,12 @@ int main() {
 
 				glm::mat4 mvp = perspective * view * model;
 				glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
+				glUniform2f(tile_data_uniform, i, 0.0f);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
 		}
 
-		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		glReadBuffer(GL_COLOR_ATTACHMENT0 + color_index);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);

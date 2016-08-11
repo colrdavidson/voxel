@@ -325,12 +325,12 @@ int main() {
 		if (persp) {
 			perspective = glm::ortho(-screen_width / scale, screen_width / scale, -screen_height / scale, screen_height / scale, -200.0f, 200.0f);
 		} else {
-			perspective = glm::perspective(glm::radians(45.0f), screen_width / screen_height, 0.1f, 500.0f);
+			perspective = glm::perspective(glm::radians(40.0f), screen_width / screen_height, 0.1f, 500.0f);
 		}
 
 		glm::mat4 view;
 		view = glm::translate(view, glm::vec3(cam_pos.x, cam_pos.y, cam_pos.z));
-		view = glm::rotate(view, glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		view = glm::rotate(view, glm::radians(35.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
 		switch (direction) {
 			case NORTH: {
@@ -369,6 +369,9 @@ int main() {
 				glActiveTexture(GL_TEXTURE0);
 				glUniform1i(tex_uniform, 0);
 
+				Point p = oned_to_threed(i, map_width, map_height);
+				glm::mat4 model = glm::translate(start_model, glm::vec3(((f32)p.x * 2.0f) - (f32)(map_width), (f32)p.z * 2.0f, ((f32)p.y * 2.0f) - (f32)(map_height)));
+
 				switch (tile_id) {
 					case 1: {
 						setup_object(attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
@@ -389,6 +392,7 @@ int main() {
 						setup_object(attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 8: {
+						model = glm::translate(model, glm::vec3(0.0f, 1.0f, 0.0f));
 						setup_object(attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
 					} break;
 					default: {
@@ -396,12 +400,7 @@ int main() {
 					} break;
 				}
 
-				Point p = oned_to_threed(i, map_width, map_height);
-
-				glm::mat4 model = glm::translate(start_model, glm::vec3(((f32)p.x * 2.0f) - (f32)(map_width), (f32)p.z * 2.0f, ((f32)p.y * 2.0f) - (f32)(map_height)));
-
 				glm::mat4 mvp = perspective * view * model;
-
 				glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}

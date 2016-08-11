@@ -1,4 +1,4 @@
-#version 150
+#version 330 core
 
 in vec2 f_tex_coords;
 in vec3 f_normals;

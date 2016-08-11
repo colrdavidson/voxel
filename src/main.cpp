@@ -254,9 +254,7 @@ int main() {
 
 	Attribs *attribs = init_attribs(shader_program, "coords", "tex_coords", "normals");
 
-	GLuint cube_model_uniform = glGetUniformLocation(shader_program, "model");
-	GLuint view_uniform = glGetUniformLocation(shader_program, "view");
-	GLuint perspective_uniform = glGetUniformLocation(shader_program, "perspective");
+	GLuint mvp_uniform = glGetUniformLocation(shader_program, "mvp");
 	GLint tex_uniform = glGetUniformLocation(shader_program, "tex");
 
 	glViewport(0, 0, 640, 480);
@@ -356,9 +354,6 @@ int main() {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		glUseProgram(shader_program);
 
-		glUniformMatrix4fv(view_uniform, 1, GL_FALSE, &view[0][0]);
-		glUniformMatrix4fv(perspective_uniform, 1, GL_FALSE, &perspective[0][0]);
-
 		enable_attribs(attribs);
 
 		i32 size;
@@ -404,7 +399,10 @@ int main() {
 				Point p = oned_to_threed(i, map_width, map_height);
 
 				glm::mat4 model = glm::translate(start_model, glm::vec3(((f32)p.x * 2.0f) - (f32)(map_width), (f32)p.z * 2.0f, ((f32)p.y * 2.0f) - (f32)(map_height)));
-				glUniformMatrix4fv(cube_model_uniform, 1, GL_FALSE, &model[0][0]);
+
+				glm::mat4 mvp = perspective * view * model;
+
+				glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
 		}

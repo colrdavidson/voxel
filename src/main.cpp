@@ -247,7 +247,7 @@ int main() {
 
 	GL_CHECK(glGenRenderbuffers(1, &click_buffer));
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, click_buffer));
-	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, 640, 480));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 640, 480));
 
 	GLint color_index = glGetFragDataLocation(shader_program, "color");
 	GLint click_index = glGetFragDataLocation(shader_program, "click");

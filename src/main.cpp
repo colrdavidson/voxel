@@ -232,7 +232,8 @@ int main() {
 	printf("GL version: %s\n", glGetString(GL_VERSION));
     printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-	GLuint shader_program = load_and_build_program("src/vert.vsh", "src/frag.fsh");
+	GLuint obj_shader_program = load_and_build_program("src/obj_vert.vsh", "src/obj_frag.fsh");
+	GLuint ui_shader_program = load_and_build_program("src/ui_vert.vsh", "src/ui_frag.fsh");
 
     GLuint frame_buffer = 0;
     GLuint depth_buffer = 0;
@@ -253,11 +254,13 @@ int main() {
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, screen_width, screen_height));
 
-	GLint color_index = glGetFragDataLocation(shader_program, "color");
-	GLint click_index = glGetFragDataLocation(shader_program, "click");
+	GLint obj_color_index = glGetFragDataLocation(obj_shader_program, "color");
+	GLint ui_color_index = glGetFragDataLocation(ui_shader_program, "color");
+	GLint click_index = glGetFragDataLocation(obj_shader_program, "click");
 
-	GLenum buffers[2];
-	buffers[color_index] = GL_COLOR_ATTACHMENT0;
+	GLenum buffers[3];
+	buffers[obj_color_index] = GL_COLOR_ATTACHMENT0;
+	buffers[ui_color_index] = GL_COLOR_ATTACHMENT0;
 	buffers[click_index] = GL_COLOR_ATTACHMENT1;
 
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
@@ -283,40 +286,50 @@ int main() {
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	f32 ratio = (f32)screen_width / (f32)screen_height;
-
 	GLuint vbo_cube_points = build_vbo(cube_points, sizeof(cube_points));
 	GLuint vbo_roof_points = build_vbo(roof_points, sizeof(roof_points));
 	GLuint vbo_door_points = build_vbo(door_points, sizeof(door_points));
 	GLuint vbo_tree_points = build_vbo(tree_points, sizeof(tree_points));
 
+	GLuint vbo_rect_points = build_vbo(rect_points, sizeof(rect_points));
+
 	GLuint vbo_cube_tex_coords = build_vbo(cube_tex_coords, sizeof(cube_tex_coords));
 	GLuint vbo_tree_tex_coords = build_vbo(tree_tex_coords, sizeof(tree_tex_coords));
+
+	GLuint vbo_rect_tex_coords = build_vbo(rect_tex_coords, sizeof(rect_tex_coords));
 
 	GLuint vbo_cube_normals = build_vbo(cube_normals, sizeof(cube_normals));
 	GLuint vbo_tree_normals = build_vbo(tree_normals, sizeof(tree_normals));
 
+	GLuint vbo_rect_normals = build_vbo(rect_normals, sizeof(rect_normals));
+
 	GLuint ibo_cube_indices = build_ibo(cube_indices, sizeof(cube_indices));
 	GLuint ibo_tree_indices = build_ibo(tree_indices, sizeof(tree_indices));
 
-	Attribs *attribs = init_attribs(shader_program, "coords", "tex_coords", "normals");
+	GLuint ibo_rect_indices = build_ibo(rect_indices, sizeof(rect_indices));
 
-	GLuint mvp_uniform = glGetUniformLocation(shader_program, "mvp");
-	GLuint tile_data_uniform = glGetUniformLocation(shader_program, "tile_data");
-	GLint tex_uniform = glGetUniformLocation(shader_program, "tex");
+	Attribs *obj_attribs = init_attribs(obj_shader_program, "coords", "tex_coords", "normals");
+	Attribs *ui_attribs = init_attribs(ui_shader_program, "coords", "tex_coords", "normals");
+
+	GLuint obj_mvp_uniform = glGetUniformLocation(obj_shader_program, "mvp");
+	GLuint obj_tile_data_uniform = glGetUniformLocation(obj_shader_program, "tile_data");
+	GLint obj_tex_uniform = glGetUniformLocation(obj_shader_program, "tex");
+
+	GLuint ui_mvp_uniform = glGetUniformLocation(ui_shader_program, "mvp");
+	GLint ui_tex_uniform = glGetUniformLocation(ui_shader_program, "tex");
 
 	glViewport(0, 0, screen_width, screen_height);
 	glEnable(GL_DEPTH_TEST);
 
 	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -50.0);
-	glm::vec3 cam_front = glm::vec3(0.0, 0.0, -1.0);
-	glm::vec3 cam_up = glm::vec3(0.0, 1.0, 0.0);
 
 	u8 *map = load_map("assets/house_map");
 	u8 map_width = 20;
 	u8 map_height = 20;
 	u8 map_depth = 4;
 	Direction direction = NORTH;
+
+	u8 selected_block_type = 1;
 
 	f32 scale = 25.0f;
 	u8 persp = true;
@@ -361,7 +374,38 @@ int main() {
 						case SDLK_x: {
                     		persp = !persp;
 						} break;
+						case SDLK_1: {
+							selected_block_type = 1;
+						} break;
+						case SDLK_2: {
+							selected_block_type = 2;
+						} break;
+						case SDLK_3: {
+							selected_block_type = 3;
+						} break;
+						case SDLK_4: {
+							selected_block_type = 4;
+						} break;
+						case SDLK_5: {
+							selected_block_type = 5;
+						} break;
+						case SDLK_6: {
+							selected_block_type = 6;
+						} break;
+						case SDLK_7: {
+							selected_block_type = 7;
+						} break;
+						case SDLK_8: {
+							selected_block_type = 8;
+						} break;
+						case SDLK_9: {
+							selected_block_type = 9;
+						} break;
 					}
+				} break;
+				case SDL_MOUSEMOTION: {
+					i32 mouse_x, mouse_y;
+					SDL_GetMouseState(&mouse_x, &mouse_y);
 				} break;
 				case SDL_MOUSEBUTTONDOWN: {
 					i32 mouse_x, mouse_y;
@@ -374,8 +418,6 @@ int main() {
 						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						u32 pos = (u32)data >> 3;
-						u8 side = ((u32)data << 29) >> 29;
-						Point p = oned_to_threed(pos, map_width, map_height);
 
 						map[pos] = 0;
 					} else if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
@@ -416,7 +458,7 @@ int main() {
 								return 1;
 							}
 						}
-						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
+						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = selected_block_type;
 					}
 				} break;
 				case SDL_QUIT: {
@@ -457,9 +499,9 @@ int main() {
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glUseProgram(shader_program);
+		glUseProgram(obj_shader_program);
 
-		enable_attribs(attribs);
+		enable_attribs(obj_attribs);
 
 		i32 size;
 		glm::mat4 start_model = glm::mat4(1.0);
@@ -468,32 +510,32 @@ int main() {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
 				glActiveTexture(GL_TEXTURE0);
-				glUniform1i(tex_uniform, 0);
+				glUniform1i(obj_tex_uniform, 0);
 
 				Point p = oned_to_threed(i, map_width, map_height);
 				glm::mat4 model = glm::translate(start_model, glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height));
 
 				switch (tile_id) {
 					case 1: {
-						setup_object(attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+						setup_object(obj_attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 2: {
-						setup_object(attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+						setup_object(obj_attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 4: {
-						setup_object(attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+						setup_object(obj_attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 5: {
-						setup_object(attribs, vbo_door_points, door_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+						setup_object(obj_attribs, vbo_door_points, door_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 6: {
-						setup_object(attribs, vbo_roof_points, roof_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+						setup_object(obj_attribs, vbo_roof_points, roof_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 7: {
-						setup_object(attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+						setup_object(obj_attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 8: {
-						setup_object(attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
+						setup_object(obj_attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
 					} break;
 					default: {
 						continue;
@@ -501,18 +543,35 @@ int main() {
 				}
 
 				glm::mat4 mvp = perspective * view * model;
-				glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
-				glUniform1i(tile_data_uniform, i);
+				glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
+				glUniform1i(obj_tile_data_uniform, i);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
 		}
+
+		glUseProgram(ui_shader_program);
+		enable_attribs(ui_attribs);
+
+		glActiveTexture(GL_TEXTURE0);
+		glUniform1i(ui_tex_uniform, 0);
+
+		f32 ui_scale = 200.0f;
+		glm::mat4 ui_perspective = glm::ortho(-(f32)screen_width / ui_scale, (f32)screen_width / ui_scale, -(f32)screen_height / ui_scale, (f32)screen_height / ui_scale, -2.0f, 2.0f);
+		glm::mat4 ui_view = glm::mat4(1.0);
+		glm::mat4 ui_model = glm::mat4(1.0);
+		glm::mat4 ui_mvp = ui_perspective * ui_view * ui_model;
+
+		setup_object(ui_attribs, vbo_rect_points, grass_tex, vbo_rect_normals, vbo_rect_tex_coords, ibo_rect_indices, &size);
+		glUniformMatrix4fv(ui_mvp_uniform, 1, GL_FALSE, &ui_mvp[0][0]);
+		glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
+
+		disable_attribs(ui_attribs);
+		disable_attribs(obj_attribs);
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		glBlitFramebuffer(0, 0, screen_width, screen_height, 0, 0, screen_width, screen_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-		disable_attribs(attribs);
 
 		SDL_GL_SwapWindow(window);
 	}

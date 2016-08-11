@@ -246,4 +246,31 @@ GLushort cube_indices[] = {
 	22, 23, 20,
 };
 
+GLfloat rect_points[] = {
+	-1.0, -1.0,  1.0,
+	1.0, -1.0,  1.0,
+	1.0,  1.0,  1.0,
+	-1.0,  1.0,  1.0,
+};
+
+GLfloat rect_normals[] = {
+	//front
+	0.0, 0.0, 1.0,
+	0.0, 0.0, 1.0,
+	0.0, 0.0, 1.0,
+	0.0, 0.0, 1.0,
+};
+
+GLfloat rect_tex_coords[] = {
+	0.0, 0.0,
+	1.0, 0.0,
+	1.0, 1.0,
+	0.0, 1.0,
+};
+
+GLushort rect_indices[] = {
+	0, 1, 2,
+	2, 3, 0,
+};
+
 #endif

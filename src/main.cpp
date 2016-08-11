@@ -237,7 +237,7 @@ int main() {
 
 	glGenRenderbuffers(1, &depth_buffer);
 	glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 640, 480);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer);
 	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, render_tex, 0);
@@ -381,6 +381,7 @@ int main() {
 			}
 		}
 
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glUseProgram(shader_program);
@@ -436,7 +437,6 @@ int main() {
 			}
 		}
 
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);

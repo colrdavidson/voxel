@@ -257,7 +257,9 @@ int main() {
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
 
-	GLenum buffers[2] = {GL_COLOR_ATTACHMENT0 | GL_COLOR_ATTACHMENT1};
+	GLenum buffers[2];
+	buffers[color_index] = GL_COLOR_ATTACHMENT0;
+	buffers[click_index] = GL_COLOR_ATTACHMENT1;
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -452,7 +454,6 @@ int main() {
 		GL_CHECK(glReadBuffer(GL_COLOR_ATTACHMENT0));
 		GL_CHECK(glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer));
 		GL_CHECK(glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0));
-		GL_CHECK(glDrawBuffer(GL_BACK));
 		GL_CHECK(glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST));
 
 		disable_attribs(attribs);

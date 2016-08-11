@@ -1,11 +1,11 @@
 #version 330 core
 
-in vec2 f_tile_data;
+flat in int f_tile_data;
 in vec2 f_tex_coords;
 in vec3 f_normals;
 
 out vec4 color;
-out vec2 click;
+out int click;
 
 uniform sampler2D tex;
 

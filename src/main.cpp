@@ -247,7 +247,7 @@ int main() {
 
 	GL_CHECK(glGenRenderbuffers(1, &click_buffer));
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, click_buffer));
-	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGB8, 640, 480));
 
 	GLint color_index = glGetFragDataLocation(shader_program, "color");
 	GLint click_index = glGetFragDataLocation(shader_program, "click");
@@ -364,7 +364,7 @@ int main() {
                         i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(mouse_x, mouse_y, 1, 1, GL_RGBA_INTEGER, GL_INT, &data);
+						glReadPixels(mouse_x, mouse_y, 1, 1, GL_RED, GL_INT, &data);
 						printf("%d, %d, %d\n", mouse_x, mouse_y, data);
 					}
 				} break;
@@ -458,7 +458,7 @@ int main() {
 
 				glm::mat4 mvp = perspective * view * model;
 				glUniformMatrix4fv(mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
-				glUniform2i(tile_data_uniform, i, 0);
+				glUniform1i(tile_data_uniform, i);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
 		}

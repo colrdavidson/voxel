@@ -212,7 +212,6 @@ int main() {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 1);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
 	SDL_Window *window = SDL_CreateWindow("Voxel", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
@@ -223,6 +222,38 @@ int main() {
     printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
 	GLuint shader_program = load_and_build_program("src/vert.vsh", "src/frag.fsh");
+
+    GLuint frame_buffer = 0;
+    GLuint depth_buffer = 0;
+	GLuint render_tex = 0;
+
+	glGenTextures(1, &render_tex);
+	glBindTexture(GL_TEXTURE_2D, render_tex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+	glGenFramebuffers(1, &frame_buffer);
+
+	glGenRenderbuffers(1, &depth_buffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 640, 480);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, render_tex, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer);
+
+	GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (!fb_status) {
+		GLenum err = glGetError();
+		printf("%d %x\n", err, err);
+		return 1;
+	}
+
+	if (fb_status != GL_FRAMEBUFFER_COMPLETE) {
+		printf("OH GOD, FB SADNESS\n");
+		return 1;
+	}
 
 	GLuint wall_tex = build_texture("assets/wall.png");
 	GLuint roof_tex = build_texture("assets/roof.png");
@@ -350,8 +381,8 @@ int main() {
 			}
 		}
 
-		glClearColor(0.0, 0.0, 0.0, 1.0);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 		glUseProgram(shader_program);
 
 		enable_attribs(attribs);
@@ -392,7 +423,6 @@ int main() {
 						setup_object(attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 8: {
-						model = glm::translate(model, glm::vec3(0.0f, 1.0f, 0.0f));
 						setup_object(attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
 					} break;
 					default: {
@@ -405,6 +435,11 @@ int main() {
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
 		}
+
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		disable_attribs(attribs);
 

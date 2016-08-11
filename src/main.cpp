@@ -222,7 +222,10 @@ int main() {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-	SDL_Window *window = SDL_CreateWindow("Voxel", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+	i32 screen_width = 640;
+	i32 screen_height = 480;
+
+	SDL_Window *window = SDL_CreateWindow("Voxel", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_SetSwapInterval(1);
 
@@ -240,15 +243,15 @@ int main() {
 
 	GL_CHECK(glGenRenderbuffers(1, &depth_buffer));
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer));
-	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, screen_width, screen_height));
 
 	GL_CHECK(glGenRenderbuffers(1, &render_buffer));
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, render_buffer));
-	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, screen_width, screen_height));
 
 	GL_CHECK(glGenRenderbuffers(1, &click_buffer));
 	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, click_buffer));
-	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, 640, 480));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, screen_width, screen_height));
 
 	GLint color_index = glGetFragDataLocation(shader_program, "color");
 	GLint click_index = glGetFragDataLocation(shader_program, "click");
@@ -280,7 +283,7 @@ int main() {
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	f32 ratio = 640.0 / 480.0;
+	f32 ratio = (f32)screen_width / (f32)screen_height;
 
 	GLuint vbo_cube_points = build_vbo(cube_points, sizeof(cube_points));
 	GLuint vbo_roof_points = build_vbo(roof_points, sizeof(roof_points));
@@ -302,7 +305,7 @@ int main() {
 	GLuint tile_data_uniform = glGetUniformLocation(shader_program, "tile_data");
 	GLint tex_uniform = glGetUniformLocation(shader_program, "tex");
 
-	glViewport(0, 0, 640, 480);
+	glViewport(0, 0, screen_width, screen_height);
 	glEnable(GL_DEPTH_TEST);
 
 	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -50.0);
@@ -350,10 +353,10 @@ int main() {
 				case SDL_KEYDOWN: {
 					switch (event.key.keysym.sym) {
 						case SDLK_e: {
-							direction = cycle_right(direction);
+							direction = cycle_left(direction);
 						} break;
 						case SDLK_q: {
-							direction = cycle_left(direction);
+							direction = cycle_right(direction);
 						} break;
 						case SDLK_x: {
                     		persp = !persp;
@@ -366,16 +369,54 @@ int main() {
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
                         i32 data = 0;
-
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(mouse_x, 480 - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						u32 pos = (u32)data >> 3;
 						u8 side = ((u32)data << 29) >> 29;
 						Point p = oned_to_threed(pos, map_width, map_height);
-						printf("(%d, %d) -> (%d, %d, %d) | %u\n", mouse_x, mouse_y, p.x, p.y, p.z, side);
-					} else {
+
+						map[pos] = 0;
+					} else if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+                        i32 data = 0;
+						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+						glReadBuffer(GL_COLOR_ATTACHMENT1);
+						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+
+						u32 pos = (u32)data >> 3;
+						u8 side = ((u32)data << 29) >> 29;
+						Point p = oned_to_threed(pos, map_width, map_height);
+
+						i8 x_adj = 0;
+						i8 y_adj = 0;
+						i8 z_adj = 0;
+
+						switch (side) {
+							case 0: {
+								y_adj = 1;
+							} break;
+							case 1: {
+								z_adj = 1;
+							} break;
+							case 2: {
+								y_adj = -1;
+							} break;
+							case 3: {
+								z_adj = -1;
+							} break;
+							case 4: {
+								x_adj = -1;
+							} break;
+							case 5: {
+								x_adj = 1;
+							} break;
+							default: {
+								puts("not a valid side");
+								return 1;
+							}
+						}
+						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
 					}
 				} break;
 				case SDL_QUIT: {
@@ -384,14 +425,11 @@ int main() {
 			}
 		}
 
-		f32 screen_width = 640.0f;
-		f32 screen_height = 480.0f;
-
  		glm::mat4 perspective;
 		if (persp) {
-			perspective = glm::ortho(-screen_width / scale, screen_width / scale, -screen_height / scale, screen_height / scale, -200.0f, 200.0f);
+			perspective = glm::ortho(-(f32)screen_width / scale, (f32)screen_width / scale, -(f32)screen_height / scale, (f32)screen_height / scale, -200.0f, 200.0f);
 		} else {
-			perspective = glm::perspective(glm::radians(40.0f), screen_width / screen_height, 0.1f, 500.0f);
+			perspective = glm::perspective(glm::radians(40.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
 		}
 
 		glm::mat4 view;
@@ -472,7 +510,7 @@ int main() {
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glBlitFramebuffer(0, 0, screen_width, screen_height, 0, 0, screen_width, screen_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		disable_attribs(attribs);
 

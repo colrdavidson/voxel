@@ -10,6 +10,7 @@
 #include "common.h"
 #include "point.h"
 #include "cube.h"
+#include "tga.h"
 
 #define RELEASE 0
 #if RELEASE
@@ -365,12 +366,14 @@ int main() {
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
                         i32 data = 0;
+
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(mouse_x, mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+						glReadPixels(mouse_x, 480 - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						Point p = oned_to_threed(data, map_width, map_height);
 						printf("(%d, %d) -> (%d, %d, %d)\n", mouse_x, mouse_y, p.x, p.y, p.z);
+					} else {
 					}
 				} break;
 				case SDL_QUIT: {
@@ -421,7 +424,6 @@ int main() {
 		i32 size;
 		glm::mat4 start_model = glm::mat4(1.0);
 
-
 		for (u32 i = 0; i < map_width * map_height * map_depth; i++) {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
@@ -429,7 +431,7 @@ int main() {
 				glUniform1i(tex_uniform, 0);
 
 				Point p = oned_to_threed(i, map_width, map_height);
-				glm::mat4 model = glm::translate(start_model, glm::vec3(((f32)p.x * 2.0f) - (f32)(map_width), (f32)p.z * 2.0f, ((f32)p.y * 2.0f) - (f32)(map_height)));
+				glm::mat4 model = glm::translate(start_model, glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height));
 
 				switch (tile_id) {
 					case 1: {

@@ -16,5 +16,42 @@ void main() {
 	f_tex_coords = tex_coords;
 	f_normals = normals;
 
-	f_tile_data = tile_data;
+	int x = int(normals.x) * 4;
+	int y = int(normals.y) * 2;
+	int z = int(normals.z);
+
+	int side = x + y + z;
+
+	switch (side) {
+		// front
+		case 1: {
+			side = 0;
+		} break;
+		// top
+		case 2: {
+			side = 1;
+		} break;
+		// back
+		case -1: {
+			side = 2;
+		} break;
+		// bottom
+		case -2: {
+			side = 3;
+		} break;
+		// left
+		case -4: {
+			side = 4;
+		} break;
+		// right
+		case 4: {
+			side = 5;
+		} break;
+		// error
+		default: {
+			side = 6;
+		} break;
+	}
+
+	f_tile_data = tile_data << 3 | side;
 }

@@ -371,8 +371,10 @@ int main() {
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
 						glReadPixels(mouse_x, 480 - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
-						Point p = oned_to_threed(data, map_width, map_height);
-						printf("(%d, %d) -> (%d, %d, %d)\n", mouse_x, mouse_y, p.x, p.y, p.z);
+						u32 pos = (u32)data >> 3;
+						u8 side = ((u32)data << 29) >> 29;
+						Point p = oned_to_threed(pos, map_width, map_height);
+						printf("(%d, %d) -> (%d, %d, %d) | %u\n", mouse_x, mouse_y, p.x, p.y, p.z, side);
 					} else {
 					}
 				} break;

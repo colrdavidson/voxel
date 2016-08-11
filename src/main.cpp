@@ -254,7 +254,7 @@ int main() {
 
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + color_index, GL_RENDERBUFFER, render_buffer));
-	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1 + click_index, GL_RENDERBUFFER, click_buffer));
+	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + click_index, GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);

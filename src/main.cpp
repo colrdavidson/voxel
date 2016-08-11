@@ -225,13 +225,7 @@ int main() {
 
     GLuint frame_buffer = 0;
     GLuint depth_buffer = 0;
-	GLuint render_tex = 0;
-
-	glGenTextures(1, &render_tex);
-	glBindTexture(GL_TEXTURE_2D, render_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	GLuint render_buffer = 0;
 
 	glGenFramebuffers(1, &frame_buffer);
 
@@ -239,8 +233,12 @@ int main() {
 	glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480);
 
+	glGenRenderbuffers(1, &render_buffer);
+	glBindRenderbuffer(GL_RENDERBUFFER, render_buffer);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480);
+
 	glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, render_tex, 0);
+	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, render_buffer, 0);
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer);
 
 	GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
@@ -381,7 +379,7 @@ int main() {
 			}
 		}
 
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		glUseProgram(shader_program);
@@ -438,6 +436,7 @@ int main() {
 		}
 
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		glBlitFramebuffer(0, 0, 640, 480, 0, 0, 640, 480, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 

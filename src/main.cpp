@@ -11,6 +11,8 @@
 #include "point.h"
 #include "cube.h"
 
+#define GL_CHECK(x) do { x; GLenum err = glGetError(); assert(err == GL_NO_ERROR); } while(0)
+
 typedef struct Attribs {
 	GLuint points_attr;
 	GLuint texpos_attr;
@@ -233,13 +235,13 @@ int main() {
 	glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
 	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 640, 480);
 
-	glGenRenderbuffers(1, &render_buffer);
-	glBindRenderbuffer(GL_RENDERBUFFER, render_buffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480);
+	GL_CHECK(glGenRenderbuffers(1, &render_buffer));
+	GL_CHECK(glBindRenderbuffer(GL_RENDERBUFFER, render_buffer));
+	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, 640, 480));
 
-	glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer);
-	glFramebufferTexture(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, render_buffer, 0);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer);
+	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
+	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));
+	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
 
 	GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (!fb_status) {

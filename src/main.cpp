@@ -47,6 +47,22 @@ void disable_attribs(Attribs *attribs) {
 	glDisableVertexAttribArray(attribs->texpos_attr);
 }
 
+typedef struct Rect {
+	f32 x;
+	f32 y;
+	f32 w;
+	f32 h;
+} Rect;
+
+glm::mat4 rect_mat(Rect *r) {
+	glm::mat4 rect = glm::mat4(1.0);
+
+	rect = glm::translate(rect, glm::vec3(r->x, r->y, 0.0f));
+	rect = glm::scale(rect, glm::vec3(r->w, r->h, 0.0f));
+
+	return rect;
+}
+
 void get_shader_err(GLuint shader) {
 	GLint err_log_max_length = 0;
 	glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &err_log_max_length);
@@ -255,19 +271,23 @@ int main() {
 	GL_CHECK(glRenderbufferStorage(GL_RENDERBUFFER, GL_R32I, screen_width, screen_height));
 
 	GLint obj_color_index = glGetFragDataLocation(obj_shader_program, "color");
-	GLint ui_color_index = glGetFragDataLocation(ui_shader_program, "color");
-	GLint click_index = glGetFragDataLocation(obj_shader_program, "click");
+	GLint obj_click_index = glGetFragDataLocation(obj_shader_program, "click");
 
-	GLenum buffers[3];
-	buffers[obj_color_index] = GL_COLOR_ATTACHMENT0;
-	buffers[ui_color_index] = GL_COLOR_ATTACHMENT0;
-	buffers[click_index] = GL_COLOR_ATTACHMENT1;
+	GLint ui_color_index = glGetFragDataLocation(ui_shader_program, "color");
+	GLint ui_click_index = glGetFragDataLocation(ui_shader_program, "click");
+
+	GLenum obj_buffers[2];
+	obj_buffers[obj_color_index] = GL_COLOR_ATTACHMENT0;
+	obj_buffers[obj_click_index] = GL_COLOR_ATTACHMENT1;
+
+	GLenum ui_buffers[2];
+	ui_buffers[ui_color_index] = GL_COLOR_ATTACHMENT0;
+	ui_buffers[ui_click_index] = GL_COLOR_ATTACHMENT1;
 
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, click_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_buffer));
-	GL_CHECK(glDrawBuffers(2, buffers));
 
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
@@ -276,11 +296,13 @@ int main() {
 
 	GLuint wall_tex = build_texture("assets/wall.png");
 	GLuint roof_tex = build_texture("assets/roof.png");
+	GLuint brick_tex = build_texture("assets/brick.png");
 	GLuint ladder_tex = build_texture("assets/ladder.png");
 	GLuint door_tex = build_texture("assets/door.png");
 	GLuint tree_tex = build_texture("assets/tree.png");
 	GLuint wood_tex = build_texture("assets/wood.png");
 	GLuint grass_tex = build_texture("assets/grass.png");
+	GLuint ui_tex = build_texture("assets/ui.png");
 
 	GLuint vao = 0;
 	glGenVertexArrays(1, &vao);
@@ -316,6 +338,7 @@ int main() {
 	GLint obj_tex_uniform = glGetUniformLocation(obj_shader_program, "tex");
 
 	GLuint ui_mvp_uniform = glGetUniformLocation(ui_shader_program, "mvp");
+	GLuint ui_tile_data_uniform = glGetUniformLocation(ui_shader_program, "tile_data");
 	GLint ui_tex_uniform = glGetUniformLocation(ui_shader_program, "tex");
 
 	glViewport(0, 0, screen_width, screen_height);
@@ -327,6 +350,7 @@ int main() {
 	u8 map_width = 20;
 	u8 map_height = 20;
 	u8 map_depth = 4;
+	u32 map_size = map_width * map_height * map_depth;
 	Direction direction = NORTH;
 
 	u8 selected_block_type = 1;
@@ -418,8 +442,11 @@ int main() {
 						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						u32 pos = (u32)data >> 3;
-
-						map[pos] = 0;
+						if (pos < map_size) {
+							map[pos] = 0;
+						} else {
+							printf("%u\n", pos);
+						}
 					} else if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
                         i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
@@ -499,6 +526,7 @@ int main() {
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+		GL_CHECK(glDrawBuffers(2, obj_buffers));
 		glUseProgram(obj_shader_program);
 
 		enable_attribs(obj_attribs);
@@ -506,7 +534,7 @@ int main() {
 		i32 size;
 		glm::mat4 start_model = glm::mat4(1.0);
 
-		for (u32 i = 0; i < map_width * map_height * map_depth; i++) {
+		for (u32 i = 0; i < map_size; i++) {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
 				glActiveTexture(GL_TEXTURE0);
@@ -521,6 +549,9 @@ int main() {
 					} break;
 					case 2: {
 						setup_object(obj_attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+					} break;
+					case 3: {
+						setup_object(ui_attribs, vbo_cube_points, brick_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
 					} break;
 					case 4: {
 						setup_object(obj_attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
@@ -549,20 +580,66 @@ int main() {
 			}
 		}
 
+		GL_CHECK(glDrawBuffers(2, ui_buffers));
 		glUseProgram(ui_shader_program);
 		enable_attribs(ui_attribs);
 
 		glActiveTexture(GL_TEXTURE0);
 		glUniform1i(ui_tex_uniform, 0);
 
-		f32 ui_scale = 200.0f;
-		glm::mat4 ui_perspective = glm::ortho(-(f32)screen_width / ui_scale, (f32)screen_width / ui_scale, -(f32)screen_height / ui_scale, (f32)screen_height / ui_scale, -2.0f, 2.0f);
+		glm::mat4 ui_perspective = glm::ortho(0.0f, (f32)screen_width, (f32)screen_height, 0.0f, -50.0f, 50.0f);
 		glm::mat4 ui_view = glm::mat4(1.0);
-		glm::mat4 ui_model = glm::mat4(1.0);
+
+		Rect UI_Frame;
+		UI_Frame.w = screen_width;
+		UI_Frame.h = (f32)screen_height / 5.0f;
+		UI_Frame.x = 0;
+		UI_Frame.y = screen_height - UI_Frame.h;
+		glm::mat4 ui_model = rect_mat(&UI_Frame);
 		glm::mat4 ui_mvp = ui_perspective * ui_view * ui_model;
 
-		setup_object(ui_attribs, vbo_rect_points, grass_tex, vbo_rect_normals, vbo_rect_tex_coords, ibo_rect_indices, &size);
+		setup_object(ui_attribs, vbo_rect_points, ui_tex, vbo_rect_normals, vbo_rect_tex_coords, ibo_rect_indices, &size);
 		glUniformMatrix4fv(ui_mvp_uniform, 1, GL_FALSE, &ui_mvp[0][0]);
+		glUniform1i(ui_tile_data_uniform, map_size + 1);
+		glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
+
+		ui_view = glm::translate(ui_view, glm::vec3(screen_width / 2.0f, (f32)screen_height - ((f32)screen_height / 10.0f), 10.0f));
+		ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
+		ui_view = glm::rotate(ui_view, glm::radians(-35.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		ui_view = glm::rotate(ui_view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		ui_model = glm::mat4(1.0);
+
+		switch (selected_block_type) {
+			case 1: {
+				setup_object(ui_attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 2: {
+				setup_object(ui_attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 3: {
+				setup_object(ui_attribs, vbo_cube_points, brick_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 4: {
+				setup_object(ui_attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 5: {
+				setup_object(ui_attribs, vbo_door_points, door_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 6: {
+				setup_object(ui_attribs, vbo_roof_points, roof_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 7: {
+				setup_object(ui_attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+			} break;
+			case 8: {
+				setup_object(ui_attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
+			} break;
+		}
+
+		ui_mvp = ui_perspective * ui_view * ui_model;
+
+		glUniformMatrix4fv(ui_mvp_uniform, 1, GL_FALSE, &ui_mvp[0][0]);
+		glUniform1i(ui_tile_data_uniform, map_size + 1);
 		glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 
 		disable_attribs(ui_attribs);

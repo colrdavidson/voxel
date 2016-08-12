@@ -393,7 +393,10 @@ int main() {
 			}
 		}
 
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
 
 		/*

@@ -14,9 +14,9 @@
 
 #define RELEASE 0
 #if RELEASE
-	#define GL_CHECK(x) x
+#define GL_CHECK(x) x
 #else
-	#define GL_CHECK(x) do { x; GLenum err = glGetError(); assert(err == GL_NO_ERROR); } while(0)
+#define GL_CHECK(x) do { x; GLenum err = glGetError(); assert(err == GL_NO_ERROR); } while(0)
 #endif
 
 void get_shader_err(GLuint shader) {
@@ -31,7 +31,7 @@ void get_shader_err(GLuint shader) {
 
 GLint build_shader(const char *file_string, GLenum shader_type) {
 	GLuint shader = glCreateShader(shader_type);
-    glShaderSource(shader, 1, &file_string, NULL);
+	glShaderSource(shader, 1, &file_string, NULL);
 
 	glCompileShader(shader);
 
@@ -87,12 +87,12 @@ int main() {
 	SDL_GL_SetSwapInterval(1);
 
 	printf("GL version: %s\n", glGetString(GL_VERSION));
-    printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
 	GLuint obj_shader_program = load_and_build_program("src/obj_vert.vsh", "src/obj_frag.fsh");
 
-    GLuint frame_buffer = 0;
-    GLuint depth_buffer = 0;
+	GLuint frame_buffer = 0;
+	GLuint depth_buffer = 0;
 	GLuint render_buffer = 0;
 	GLuint click_buffer = 0;
 
@@ -201,7 +201,7 @@ int main() {
 	u8 persp = true;
 	u8 running = true;
 	while (running) {
-    	SDL_Event event;
+		SDL_Event event;
 
 		f32 cam_speed = 0.15;
 		SDL_PumpEvents();
@@ -238,7 +238,7 @@ int main() {
 							direction = cycle_right(direction);
 						} break;
 						case SDLK_x: {
-                    		persp = !persp;
+							persp = !persp;
 						} break;
 					}
 				} break;
@@ -251,7 +251,7 @@ int main() {
 					u32 buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-                        i32 data = 0;
+						i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
 						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
@@ -263,7 +263,7 @@ int main() {
 							printf("%u\n", pos);
 						}
 					} else if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
-                        i32 data = 0;
+						i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
 						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
@@ -310,7 +310,7 @@ int main() {
 		}
 
 		glEnable(GL_DEPTH_TEST);
- 		glm::mat4 perspective;
+		glm::mat4 perspective;
 		if (persp) {
 			perspective = glm::ortho(-(f32)screen_width / scale, (f32)screen_width / scale, -(f32)screen_height / scale, (f32)screen_height / scale, -200.0f, 200.0f);
 		} else {
@@ -324,16 +324,16 @@ int main() {
 		switch (direction) {
 			case NORTH: {
 				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	  		} break;
+			} break;
 			case SOUTH: {
 				view = glm::rotate(view, glm::radians(135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	  		} break;
+			} break;
 			case WEST: {
 				view = glm::rotate(view, glm::radians(-135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	  		} break;
+			} break;
 			case EAST: {
 				view = glm::rotate(view, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-	  		} break;
+			} break;
 			default: {
 				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 			}
@@ -396,11 +396,11 @@ int main() {
 		}
 
 		/*
-		GL_CHECK(glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]));
-		GL_CHECK(glUniform1i(obj_tile_data_uniform, i));
+		   GL_CHECK(glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]));
+		   GL_CHECK(glUniform1i(obj_tile_data_uniform, i));
 
-		GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
-		*/
+		   GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
+		   */
 
 		//GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
 

@@ -21,7 +21,7 @@ char *file_to_string(const char *filename) {
 	fseek(file, 0, SEEK_SET);
 
 	char *file_string = (char *)malloc(length + 1);
-	fread(file_string, 1, length, file);
+	length = fread(file_string, 1, length, file);
 	file_string[length] = 0;
 
 	fclose(file);

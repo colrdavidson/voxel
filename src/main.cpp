@@ -370,15 +370,15 @@ int main() {
 		GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices));
 		GL_CHECK(glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size));
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
-		glVertexAttribPointer(tile_data_attr, 1, GL_INT, GL_FALSE, 0, NULL);
-		glVertexAttribDivisor(tile_data_attr, 1);
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data));
+		GL_CHECK(glVertexAttribIPointer(tile_data_attr, 1, GL_INT, 0, NULL));
+		GL_CHECK(glVertexAttribDivisor(tile_data_attr, 1));
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps));
 		for (u32 i = 0; i < 4; i++) {
-			glVertexAttribPointer(mvp_attr + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void *)(sizeof(glm::vec4) * i));
-			glEnableVertexAttribArray(mvp_attr + i);
-			glVertexAttribDivisor(mvp_attr + i, 1);
+			GL_CHECK(glVertexAttribPointer(mvp_attr + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void *)(sizeof(glm::vec4) * i)));
+			GL_CHECK(glEnableVertexAttribArray(mvp_attr + i));
+			GL_CHECK(glVertexAttribDivisor(mvp_attr + i, 1));
 		}
 
 		memset(mvps, 0, sizeof(glm::mat4) * map_size);
@@ -392,6 +392,7 @@ int main() {
 
 				mvps[i] = mvp;
 				tile_data[i] = i;
+				GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
 			}
 		}
 
@@ -402,9 +403,7 @@ int main() {
 		   GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
 		   */
 
-		//GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
-
-		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
+		//GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
 
 		glDisableVertexAttribArray(points_attr);
 		glDisableVertexAttribArray(texpos_attr);

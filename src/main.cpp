@@ -184,18 +184,16 @@ int main() {
 	memset(map, 1, map_size);
 	Direction direction = NORTH;
 
-	glm::mat4 *mvps= (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
+	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
 	GLuint vbo_mvps;
 	glGenBuffers(1, &vbo_mvps);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
 
 	GLuint vbo_tile_data;
 	glGenBuffers(1, &vbo_tile_data);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
 
 	f32 scale = 25.0f;
 	u8 persp = true;
@@ -392,18 +390,20 @@ int main() {
 
 				mvps[i] = mvp;
 				tile_data[i] = i;
-				GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
 			}
 		}
+
+		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
 
 		/*
 		   GL_CHECK(glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]));
 		   GL_CHECK(glUniform1i(obj_tile_data_uniform, i));
 
 		   GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
-		   */
+		*/
 
-		//GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
+		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
 
 		glDisableVertexAttribArray(points_attr);
 		glDisableVertexAttribArray(texpos_attr);

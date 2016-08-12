@@ -342,7 +342,6 @@ int main() {
 	GLint ui_tex_uniform = glGetUniformLocation(ui_shader_program, "tex");
 
 	glViewport(0, 0, screen_width, screen_height);
-	glEnable(GL_DEPTH_TEST);
 
 	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -50.0);
 
@@ -494,6 +493,7 @@ int main() {
 			}
 		}
 
+		glEnable(GL_DEPTH_TEST);
  		glm::mat4 perspective;
 		if (persp) {
 			perspective = glm::ortho(-(f32)screen_width / scale, (f32)screen_width / scale, -(f32)screen_height / scale, (f32)screen_height / scale, -200.0f, 200.0f);
@@ -580,6 +580,8 @@ int main() {
 			}
 		}
 
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glDisable(GL_DEPTH_TEST);
 		GL_CHECK(glDrawBuffers(2, ui_buffers));
 		glUseProgram(ui_shader_program);
 		enable_attribs(ui_attribs);
@@ -603,38 +605,48 @@ int main() {
 		glUniform1i(ui_tile_data_uniform, map_size + 1);
 		glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 
+		glEnable(GL_DEPTH_TEST);
 		ui_view = glm::translate(ui_view, glm::vec3(screen_width / 2.0f, (f32)screen_height - ((f32)screen_height / 10.0f), 10.0f));
-		ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
-		ui_view = glm::rotate(ui_view, glm::radians(-35.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-		ui_view = glm::rotate(ui_view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 		ui_model = glm::mat4(1.0);
 
 		switch (selected_block_type) {
 			case 1: {
 				setup_object(ui_attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 2: {
 				setup_object(ui_attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 3: {
 				setup_object(ui_attribs, vbo_cube_points, brick_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 4: {
 				setup_object(ui_attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 5: {
 				setup_object(ui_attribs, vbo_door_points, door_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 6: {
 				setup_object(ui_attribs, vbo_roof_points, roof_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 7: {
 				setup_object(ui_attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
+				ui_view = glm::scale(ui_view, glm::vec3(20.0f, 20.0f, 20.0f));
 			} break;
 			case 8: {
 				setup_object(ui_attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
+				ui_view = glm::translate(ui_view, glm::vec3(0.0f, -25.0f, 0.0f));
+				ui_view = glm::scale(ui_view, glm::vec3(15.0f, 15.0f, 15.0f));
 			} break;
 		}
+
+		ui_view = glm::rotate(ui_view, glm::radians(-35.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+		ui_view = glm::rotate(ui_view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
 		ui_mvp = ui_perspective * ui_view * ui_model;
 

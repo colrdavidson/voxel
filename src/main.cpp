@@ -11,65 +11,7 @@
 #include "point.h"
 #include "cube.h"
 #include "tga.h"
-
-#define RELEASE 0
-#if RELEASE
-#define GL_CHECK(x) x
-#else
-#define GL_CHECK(x) do { x; GLenum err = glGetError(); assert(err == GL_NO_ERROR); } while(0)
-#endif
-
-void get_shader_err(GLuint shader) {
-	GLint err_log_max_length = 0;
-	glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &err_log_max_length);
-	char *err_log = (char *)malloc(err_log_max_length);
-
-	GLsizei err_log_length = 0;
-	glGetShaderInfoLog(shader, err_log_max_length, &err_log_length, err_log);
-	printf("%s\n", err_log);
-}
-
-GLint build_shader(const char *file_string, GLenum shader_type) {
-	GLuint shader = glCreateShader(shader_type);
-	glShaderSource(shader, 1, &file_string, NULL);
-
-	glCompileShader(shader);
-
-	GLint compile_success = GL_FALSE;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &compile_success);
-
-	if (!compile_success && shader_type == GL_VERTEX_SHADER) {
-		printf("Vertex Shader %d compile error!\n", shader);
-		get_shader_err(shader);
-		return 0;
-	} else if (!compile_success && shader_type == GL_FRAGMENT_SHADER) {
-		printf("Fragment Shader %d compile error!\n", shader);
-		get_shader_err(shader);
-		return 0;
-	}
-
-	return shader;
-}
-
-GLuint load_and_build_program(const char *vert_filename, const char *frag_filename) {
-	GLuint shader_program = glCreateProgram();
-
-	char *vert_file = file_to_string(vert_filename);
-	char *frag_file = file_to_string(frag_filename);
-
-	GLint vert_shader = build_shader(vert_file, GL_VERTEX_SHADER);
-	GLint frag_shader = build_shader(frag_file, GL_FRAGMENT_SHADER);
-
-	free(vert_file);
-	free(frag_file);
-
-	GL_CHECK(glAttachShader(shader_program, vert_shader));
-	GL_CHECK(glAttachShader(shader_program, frag_shader));
-
-	GL_CHECK(glLinkProgram(shader_program));
-
-	return shader_program;
-}
+#include "gl_helper.h"
 
 int main() {
 	SDL_Init(SDL_INIT_VIDEO);
@@ -85,6 +27,7 @@ int main() {
 	SDL_Window *window = SDL_CreateWindow("Voxel", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
 	SDL_GL_SetSwapInterval(1);
+    SDL_GL_GetDrawableSize(window, &screen_width, &screen_height);
 
 	printf("GL version: %s\n", glGetString(GL_VERSION));
 	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
@@ -128,7 +71,7 @@ int main() {
 	}
 
 	GLuint wall_tex;
-	SDL_Surface *wall_surf = IMG_Load("assets/wall.png");
+	SDL_Surface *wall_surf = IMG_Load("assets/brick.png");
 	glGenTextures(1, &wall_tex);
 	glBindTexture(GL_TEXTURE_2D, wall_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -168,33 +111,40 @@ int main() {
 	GLuint texpos_attr = glGetAttribLocation(obj_shader_program, "tex_coords");
 	GLuint normals_attr = glGetAttribLocation(obj_shader_program, "normals");
 	GLuint tile_data_attr = glGetAttribLocation(obj_shader_program, "tile_data");
-	GLuint pos_attr = glGetAttribLocation(obj_shader_program, "pos");
+	GLuint mvp_attr = glGetAttribLocation(obj_shader_program, "mvp");
 
 	GLint obj_tex_uniform = glGetUniformLocation(obj_shader_program, "tex");
-	GLint obj_pv_uniform = glGetUniformLocation(obj_shader_program, "pv");
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -50.0);
 
-	u8 map_width = 100;
-	u8 map_height = 100;
-	u8 map_depth = 100;
+	u8 map_width = 25;
+	u8 map_height = 25;
+	u8 map_depth = 25;
 	u32 map_size = map_width * map_height * map_depth;
 	u8 *map = (u8 *)malloc(map_size);
 	memset(map, 1, map_size);
-	Direction direction = NORTH;
+	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -map_depth * 2.0);
 
-	glm::vec3 *pos = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
+	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
-	GLuint vbo_pos;
-	glGenBuffers(1, &vbo_pos);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
+	GLuint vbo_mvps;
+	glGenBuffers(1, &vbo_mvps);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
 
 	GLuint vbo_tile_data;
 	glGenBuffers(1, &vbo_tile_data);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
+
+	f32 current_time = (f32)SDL_GetTicks() / 60.0;
+	f32 t = 0.0;
+	f32 dt = 0.0;
+
+	glm::vec2 angle = glm::vec2(0.0, 0.0);
+
+	i32 old_mouse_x = 0;
+	i32 old_mouse_y = 0;
 
 	f32 scale = 25.0f;
 	u8 persp = true;
@@ -202,58 +152,72 @@ int main() {
 	while (running) {
 		SDL_Event event;
 
-		f32 cam_speed = 0.15;
+		f32 new_time = (f32)SDL_GetTicks() / 60.0;
+		f32 dt = new_time - current_time;
+		current_time = new_time;
+		t += dt;
+
+		glm::vec3 dir = glm::vec3(sin(angle.y) * sin(angle.x), sin(angle.y), cos(angle.y) * cos(angle.x));
+		glm::vec3 right = glm::vec3(sin(angle.x - 3.14f / 2.0f), 0, cos(angle.x - 3.14f / 2.0f));
+		glm::vec3 up = glm::cross(right, dir);
+
+
+		f32 cam_speed = 1.0;
+		f32 mouse_speed = 0.005;
 		SDL_PumpEvents();
 		const u8 *state = SDL_GetKeyboardState(NULL);
 		if (state[SDL_SCANCODE_W]) {
-			cam_pos.y += cam_speed;
+			cam_pos += dir * dt * cam_speed;
 		}
 		if (state[SDL_SCANCODE_S]) {
-			cam_pos.y -= cam_speed;
+			cam_pos -= dir * dt * cam_speed;
 		}
 		if (state[SDL_SCANCODE_A]) {
-			cam_pos.x -= cam_speed;
+			cam_pos -= right * dt * cam_speed;
 		}
 		if (state[SDL_SCANCODE_D]) {
-			cam_pos.x += cam_speed;
-		}
-		if (state[SDL_SCANCODE_LSHIFT]) {
-			cam_pos.z += cam_speed;
-			scale += cam_speed;
-		}
-		if (state[SDL_SCANCODE_LCTRL]) {
-			cam_pos.z -= cam_speed;
-			scale -= cam_speed;
+			cam_pos += right * dt * cam_speed;
 		}
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 				case SDL_KEYDOWN: {
 					switch (event.key.keysym.sym) {
-						case SDLK_e: {
-							direction = cycle_left(direction);
-						} break;
-						case SDLK_q: {
-							direction = cycle_right(direction);
-						} break;
-						case SDLK_x: {
-							persp = !persp;
+						case SDLK_f: {
+							t = 0;
 						} break;
 					}
 				} break;
 				case SDL_MOUSEMOTION: {
 					i32 mouse_x, mouse_y;
 					SDL_GetMouseState(&mouse_x, &mouse_y);
+
+					angle.x += mouse_speed * dt * (f32)((screen_width / 2) - mouse_x);
+					angle.y += mouse_speed * dt * (f32)((screen_height / 2) - (screen_height - mouse_y));
+
+                    f32 angle_max = 3.14 * 2;
+
+					if (angle.x > angle_max || angle.x < -angle_max) {
+						angle.x = 0.0f;
+					}
+
+					if (angle.y > angle_max || angle.y < -angle_max) {
+						angle.y = 0.0f;
+					}
+
+					SDL_WarpMouseInWindow(window, screen_width / 2, screen_height / 2);
 				} break;
 				case SDL_MOUSEBUTTONDOWN: {
 					i32 mouse_x, mouse_y;
 					u32 buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+						SDL_SetRelativeMouseMode(SDL_TRUE);
+
 						i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+						glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						u32 pos = (u32)data >> 3;
 						if (pos < map_size) {
@@ -308,35 +272,16 @@ int main() {
 			}
 		}
 
+		printf("%f\n", dt);
+		printf("%f, %f\n", angle.x, angle.y);
+		printf("%f, %f, %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
+
 		glEnable(GL_DEPTH_TEST);
 		glm::mat4 perspective;
-		if (persp) {
-			perspective = glm::ortho(-(f32)screen_width / scale, (f32)screen_width / scale, -(f32)screen_height / scale, (f32)screen_height / scale, -200.0f, 200.0f);
-		} else {
-			perspective = glm::perspective(glm::radians(40.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
-		}
+		perspective = glm::perspective(glm::radians(40.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
 
 		glm::mat4 view;
-		view = glm::translate(view, glm::vec3(cam_pos.x, cam_pos.y, cam_pos.z));
-		view = glm::rotate(view, glm::radians(35.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-
-		switch (direction) {
-			case NORTH: {
-				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-			} break;
-			case SOUTH: {
-				view = glm::rotate(view, glm::radians(135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-			} break;
-			case WEST: {
-				view = glm::rotate(view, glm::radians(-135.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-			} break;
-			case EAST: {
-				view = glm::rotate(view, glm::radians(45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-			} break;
-			default: {
-				view = glm::rotate(view, glm::radians(-45.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-			}
-		}
+		view = glm::lookAt(cam_pos, cam_pos + dir, up);
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -348,7 +293,7 @@ int main() {
 		glEnableVertexAttribArray(texpos_attr);
 		glEnableVertexAttribArray(normals_attr);
 		glEnableVertexAttribArray(tile_data_attr);
-		glEnableVertexAttribArray(pos_attr);
+		glEnableVertexAttribArray(mvp_attr);
 
 		i32 size;
 
@@ -372,30 +317,43 @@ int main() {
 		GL_CHECK(glVertexAttribIPointer(tile_data_attr, 1, GL_INT, 0, NULL));
 		GL_CHECK(glVertexAttribDivisor(tile_data_attr, 1));
 
-		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_pos));
-		GL_CHECK(glVertexAttribPointer(pos_attr, 3, GL_FLOAT, GL_FALSE, 0, 0));
-		GL_CHECK(glVertexAttribDivisor(pos_attr, 1));
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps));
+		for (u32 i = 0; i < 4; i++) {
+			GL_CHECK(glVertexAttribPointer(mvp_attr + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void *)(sizeof(glm::vec4) * i)));
+			GL_CHECK(glEnableVertexAttribArray(mvp_attr + i));
+			GL_CHECK(glVertexAttribDivisor(mvp_attr + i, 1));
+		}
 
-		memset(pos, 0, sizeof(glm::vec3) * map_size);
+		glm::mat4 pv = perspective * view;
+		memset(mvps, 0, sizeof(glm::mat4) * map_size);
 		memset(tile_data, 0, sizeof(i32) * map_size);
 		for (u32 i = 0; i < map_size; i++) {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
 				Point p = oned_to_threed(i, map_width, map_height);
 
-				pos[i] = glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height);
+				glm::mat4 model = glm::mat4(1.0);
+
+				model = glm::translate(model, glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height));
+				glm::mat4 mvp = pv * model;
+
+				mvps[i] = mvp;
 				tile_data[i] = i;
 			}
 		}
 
-		glm::mat4 pv = perspective * view;
-		GL_CHECK(glUniformMatrix4fv(obj_pv_uniform, 1, GL_FALSE, &pv[0][0]));
-
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * map_size, pos, GL_STREAM_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
+
+		/*
+		   GL_CHECK(glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]));
+		   GL_CHECK(glUniform1i(obj_tile_data_uniform, i));
+
+		   GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
+		*/
 
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
 
@@ -403,7 +361,7 @@ int main() {
 		glDisableVertexAttribArray(texpos_attr);
 		glDisableVertexAttribArray(normals_attr);
 		glDisableVertexAttribArray(tile_data_attr);
-		glDisableVertexAttribArray(pos_attr);
+		glDisableVertexAttribArray(mvp_attr);
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);

@@ -5,21 +5,14 @@ in vec3 normals;
 in vec2 tex_coords;
 
 in int tile_data;
-in vec3 pos;
-
-uniform mat4 pv;
+in mat4 mvp;
 
 flat out int f_tile_data;
 out vec2 f_tex_coords;
 out vec3 f_normals;
 
 void main() {
-	mat4 model = mat4(vec4(1.0, 0.0, 0.0, 0.0),
-					  vec4(0.0, 1.0, 0.0, 0.0),
-					  vec4(0.0, 0.0, 1.0, 0.0),
-					  vec4(pos, 1.0));
-
-	gl_Position = pv * model * vec4(coords, 1.0);
+	gl_Position = mvp * vec4(coords, 1.0);
 	f_tex_coords = tex_coords;
 	f_normals = normals;
 

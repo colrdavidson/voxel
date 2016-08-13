@@ -168,28 +168,29 @@ int main() {
 	GLuint texpos_attr = glGetAttribLocation(obj_shader_program, "tex_coords");
 	GLuint normals_attr = glGetAttribLocation(obj_shader_program, "normals");
 	GLuint tile_data_attr = glGetAttribLocation(obj_shader_program, "tile_data");
-	GLuint mvp_attr = glGetAttribLocation(obj_shader_program, "mvp");
+	GLuint pos_attr = glGetAttribLocation(obj_shader_program, "pos");
 
 	GLint obj_tex_uniform = glGetUniformLocation(obj_shader_program, "tex");
+	GLint obj_pv_uniform = glGetUniformLocation(obj_shader_program, "pv");
 
 	glViewport(0, 0, screen_width, screen_height);
 
 	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -50.0);
 
-	u8 map_width = 20;
-	u8 map_height = 20;
-	u8 map_depth = 4;
+	u8 map_width = 100;
+	u8 map_height = 100;
+	u8 map_depth = 100;
 	u32 map_size = map_width * map_height * map_depth;
 	u8 *map = (u8 *)malloc(map_size);
 	memset(map, 1, map_size);
 	Direction direction = NORTH;
 
-	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
+	glm::vec3 *pos = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
-	GLuint vbo_mvps;
-	glGenBuffers(1, &vbo_mvps);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
+	GLuint vbo_pos;
+	glGenBuffers(1, &vbo_pos);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
 
 	GLuint vbo_tile_data;
 	glGenBuffers(1, &vbo_tile_data);
@@ -347,10 +348,9 @@ int main() {
 		glEnableVertexAttribArray(texpos_attr);
 		glEnableVertexAttribArray(normals_attr);
 		glEnableVertexAttribArray(tile_data_attr);
-		glEnableVertexAttribArray(mvp_attr);
+		glEnableVertexAttribArray(pos_attr);
 
 		i32 size;
-		glm::mat4 start_model = glm::mat4(1.0);
 
 		GL_CHECK(glActiveTexture(GL_TEXTURE0));
 		GL_CHECK(glUniform1i(obj_tex_uniform, 0));
@@ -372,39 +372,30 @@ int main() {
 		GL_CHECK(glVertexAttribIPointer(tile_data_attr, 1, GL_INT, 0, NULL));
 		GL_CHECK(glVertexAttribDivisor(tile_data_attr, 1));
 
-		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps));
-		for (u32 i = 0; i < 4; i++) {
-			GL_CHECK(glVertexAttribPointer(mvp_attr + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void *)(sizeof(glm::vec4) * i)));
-			GL_CHECK(glEnableVertexAttribArray(mvp_attr + i));
-			GL_CHECK(glVertexAttribDivisor(mvp_attr + i, 1));
-		}
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_pos));
+		GL_CHECK(glVertexAttribPointer(pos_attr, 3, GL_FLOAT, GL_FALSE, 0, 0));
+		GL_CHECK(glVertexAttribDivisor(pos_attr, 1));
 
-		memset(mvps, 0, sizeof(glm::mat4) * map_size);
+		memset(pos, 0, sizeof(glm::vec3) * map_size);
 		memset(tile_data, 0, sizeof(i32) * map_size);
 		for (u32 i = 0; i < map_size; i++) {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
 				Point p = oned_to_threed(i, map_width, map_height);
-				glm::mat4 model = glm::translate(start_model, glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height));
-				glm::mat4 mvp = perspective * view * model;
 
-				mvps[i] = mvp;
+				pos[i] = glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height);
 				tile_data[i] = i;
 			}
 		}
 
+		glm::mat4 pv = perspective * view;
+		GL_CHECK(glUniformMatrix4fv(obj_pv_uniform, 1, GL_FALSE, &pv[0][0]));
+
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
-
-		/*
-		   GL_CHECK(glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]));
-		   GL_CHECK(glUniform1i(obj_tile_data_uniform, i));
-
-		   GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
-		*/
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * map_size, pos, GL_STREAM_DRAW);
 
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
 
@@ -412,7 +403,7 @@ int main() {
 		glDisableVertexAttribArray(texpos_attr);
 		glDisableVertexAttribArray(normals_attr);
 		glDisableVertexAttribArray(tile_data_attr);
-		glDisableVertexAttribArray(mvp_attr);
+		glDisableVertexAttribArray(pos_attr);
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);

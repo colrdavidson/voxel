@@ -71,7 +71,7 @@ int main() {
 	}
 
 	GLuint wall_tex;
-	SDL_Surface *wall_surf = IMG_Load("assets/brick.png");
+	SDL_Surface *wall_surf = IMG_Load("assets/grass.png");
 	glGenTextures(1, &wall_tex);
 	glBindTexture(GL_TEXTURE_2D, wall_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -117,14 +117,12 @@ int main() {
 
 	glViewport(0, 0, screen_width, screen_height);
 
-
-	u8 map_width = 25;
-	u8 map_height = 25;
-	u8 map_depth = 25;
+	u32 map_width = 16 * 5;
+	u32 map_height = 16;
+	u32 map_depth = 16 * 5;
 	u32 map_size = map_width * map_height * map_depth;
 	u8 *map = (u8 *)malloc(map_size);
 	memset(map, 1, map_size);
-	glm::vec3 cam_pos = glm::vec3(0.0, 0.0, -map_depth * 2.0);
 
 	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
@@ -139,15 +137,15 @@ int main() {
 
 	f32 current_time = (f32)SDL_GetTicks() / 60.0;
 	f32 t = 0.0;
-	f32 dt = 0.0;
 
-	glm::vec2 angle = glm::vec2(0.0, 0.0);
+	glm::vec3 camera_pos = glm::vec3(map_width / 2, map_height + 1.0, map_depth / 2);
+	glm::vec3 camera_front = glm::vec3(0.0, 0.0, 1.0);
+	glm::vec3 camera_up = glm::vec3(0.0, 1.0, 0.0);
 
-	i32 old_mouse_x = 0;
-	i32 old_mouse_y = 0;
+	f32 yaw = 0.0f;
+	f32 pitch = 0.0f;
 
-	f32 scale = 25.0f;
-	u8 persp = true;
+	u8 warped = false;
 	u8 running = true;
 	while (running) {
 		SDL_Event event;
@@ -157,27 +155,24 @@ int main() {
 		current_time = new_time;
 		t += dt;
 
-		glm::vec3 dir = glm::vec3(sin(angle.y) * sin(angle.x), sin(angle.y), cos(angle.y) * cos(angle.x));
-		glm::vec3 right = glm::vec3(sin(angle.x - 3.14f / 2.0f), 0, cos(angle.x - 3.14f / 2.0f));
-		glm::vec3 up = glm::cross(right, dir);
-
-
-		f32 cam_speed = 1.0;
-		f32 mouse_speed = 0.005;
+		f32 saved_y = camera_pos.y;
+		f32 cam_speed = 0.5;
 		SDL_PumpEvents();
 		const u8 *state = SDL_GetKeyboardState(NULL);
 		if (state[SDL_SCANCODE_W]) {
-			cam_pos += dir * dt * cam_speed;
+			camera_pos += cam_speed * camera_front * dt;
 		}
 		if (state[SDL_SCANCODE_S]) {
-			cam_pos -= dir * dt * cam_speed;
+			camera_pos -= cam_speed * camera_front * dt;
 		}
 		if (state[SDL_SCANCODE_A]) {
-			cam_pos -= right * dt * cam_speed;
+			camera_pos -= glm::normalize(glm::cross(camera_front, camera_up)) * cam_speed * dt;
 		}
 		if (state[SDL_SCANCODE_D]) {
-			cam_pos += right * dt * cam_speed;
+			camera_pos += glm::normalize(glm::cross(camera_front, camera_up)) * cam_speed * dt;
 		}
+
+		camera_pos.y = saved_y;
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
@@ -189,30 +184,40 @@ int main() {
 					}
 				} break;
 				case SDL_MOUSEMOTION: {
-					i32 mouse_x, mouse_y;
-					SDL_GetMouseState(&mouse_x, &mouse_y);
+					if (!warped) {
+						i32 mouse_x, mouse_y;
+						SDL_GetRelativeMouseState(&mouse_x, &mouse_y);
 
-					angle.x += mouse_speed * dt * (f32)((screen_width / 2) - mouse_x);
-					angle.y += mouse_speed * dt * (f32)((screen_height / 2) - (screen_height - mouse_y));
+						f32 x_off = mouse_x;
+						f32 y_off = -mouse_y;
 
-                    f32 angle_max = 3.14 * 2;
+						f32 mouse_speed = 0.25;
+						x_off *= mouse_speed;
+						y_off *= mouse_speed;
 
-					if (angle.x > angle_max || angle.x < -angle_max) {
-						angle.x = 0.0f;
+						yaw += x_off;
+						pitch += y_off;
+
+						if (pitch > 89.0f)
+							pitch = 89.0f;
+						if (pitch < -89.0f)
+							pitch = -89.0f;
+
+						glm::vec3 front = glm::vec3(cos(glm::radians(yaw)) * cos(glm::radians(pitch)), sin(glm::radians(pitch)), sin(glm::radians(yaw)) * cos(glm::radians(pitch)));
+						camera_front = front;
+
+						SDL_WarpMouseInWindow(window, screen_width / 2, screen_height / 2);
+						warped = true;
+					} else {
+						warped = false;
 					}
-
-					if (angle.y > angle_max || angle.y < -angle_max) {
-						angle.y = 0.0f;
-					}
-
-					SDL_WarpMouseInWindow(window, screen_width / 2, screen_height / 2);
 				} break;
 				case SDL_MOUSEBUTTONDOWN: {
 					i32 mouse_x, mouse_y;
 					u32 buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
+					SDL_SetRelativeMouseMode(SDL_TRUE);
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-						SDL_SetRelativeMouseMode(SDL_TRUE);
 
 						i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
@@ -220,6 +225,10 @@ int main() {
 						glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						u32 pos = (u32)data >> 3;
+
+						Point p = oned_to_threed(pos, map_width, map_height);
+						printf("%f, %f, %f | %d, %d, %d\n", camera_pos.x, camera_pos.y, camera_pos.z, p.x, p.y, p.z);
+
 						if (pos < map_size) {
 							map[pos] = 0;
 						} else {
@@ -229,7 +238,7 @@ int main() {
 						i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(mouse_x, screen_height - mouse_y, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+						glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 						u32 pos = (u32)data >> 3;
 						u8 side = ((u32)data << 29) >> 29;
@@ -272,16 +281,13 @@ int main() {
 			}
 		}
 
-		printf("%f\n", dt);
-		printf("%f, %f\n", angle.x, angle.y);
-		printf("%f, %f, %f\n", cam_pos.x, cam_pos.y, cam_pos.z);
 
 		glEnable(GL_DEPTH_TEST);
 		glm::mat4 perspective;
 		perspective = glm::perspective(glm::radians(40.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
 
 		glm::mat4 view;
-		view = glm::lookAt(cam_pos, cam_pos + dir, up);
+		view = glm::lookAt(camera_pos, camera_pos + camera_front, camera_up);
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -334,7 +340,7 @@ int main() {
 
 				glm::mat4 model = glm::mat4(1.0);
 
-				model = glm::translate(model, glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height));
+				model = glm::translate(model, glm::vec3(p.x, p.y, p.z));
 				glm::mat4 mvp = pv * model;
 
 				mvps[i] = mvp;

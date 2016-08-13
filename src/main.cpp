@@ -164,16 +164,6 @@ u8 *load_map(const char *map_file) {
 		fgets(line, 256, fp);
 	}
 
-	/*for (u32 z = 0; z < map_depth; z++) {
-	  for (u32 y = 0; y < map_height; y++) {
-	  for (u32 x = 0; x < map_width; x++) {
-	  printf("%d ", map[threed_to_oned(x, y, z, map_width, map_height)]);
-	  }
-	  printf("\n");
-	  }
-	  printf("\n");
-	  }*/
-
 	fclose(fp);
 	return map;
 }
@@ -308,7 +298,16 @@ int main() {
 	glGenVertexArrays(1, &vao);
 	glBindVertexArray(vao);
 
-	GLuint vbo_cube_points = build_vbo(cube_points, sizeof(cube_points));
+	GLuint vbo_cube_points = 0;
+	glGenBuffers(1, &vbo_cube_points);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
+	glm::vec3 *local_cube_points = (glm::vec3 *)malloc(sizeof(glm::vec3) * sizeof(cube_points));
+
+	for (u32 idx = 0; idx < sizeof(cube_points);) {
+		local_cube_points[idx] = glm::vec3(cube_points[idx], cube_points[idx + 1], cube_points[idx + 2]);
+		idx += 3;
+	}
+
 	GLuint vbo_roof_points = build_vbo(roof_points, sizeof(roof_points));
 	GLuint vbo_door_points = build_vbo(door_points, sizeof(door_points));
 	GLuint vbo_tree_points = build_vbo(tree_points, sizeof(tree_points));
@@ -534,6 +533,11 @@ int main() {
 		i32 size;
 		glm::mat4 start_model = glm::mat4(1.0);
 
+		for (u32 idx = 0; idx < sizeof(cube_points);) {
+			local_cube_points[idx] = glm::vec3(cube_points[idx], cube_points[idx + 1], cube_points[idx + 2]);
+			idx += 3;
+		}
+
 		for (u32 i = 0; i < map_size; i++) {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
@@ -541,40 +545,31 @@ int main() {
 				glUniform1i(obj_tex_uniform, 0);
 
 				Point p = oned_to_threed(i, map_width, map_height);
-				glm::mat4 model = glm::translate(start_model, glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height));
 
-				switch (tile_id) {
-					case 1: {
-						setup_object(obj_attribs, vbo_cube_points, wall_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 2: {
-						setup_object(obj_attribs, vbo_cube_points, grass_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 3: {
-						setup_object(ui_attribs, vbo_cube_points, brick_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 4: {
-						setup_object(obj_attribs, vbo_cube_points, wood_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 5: {
-						setup_object(obj_attribs, vbo_door_points, door_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 6: {
-						setup_object(obj_attribs, vbo_roof_points, roof_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 7: {
-						setup_object(obj_attribs, vbo_cube_points, ladder_tex, vbo_cube_normals, vbo_cube_tex_coords, ibo_cube_indices, &size);
-					} break;
-					case 8: {
-						setup_object(obj_attribs, vbo_tree_points, tree_tex, vbo_tree_normals, vbo_tree_tex_coords, ibo_tree_indices, &size);
-					} break;
-					default: {
-						continue;
-					} break;
+				glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
+				glVertexAttribPointer(obj_attribs->points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
+				glBufferData(GL_ARRAY_BUFFER, sizeof(cube_points), cube_points, GL_STREAM_DRAW);
+
+				glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
+				glVertexAttribPointer(obj_attribs->normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+				glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
+				glVertexAttribPointer(obj_attribs->texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0);
+				glBindTexture(GL_TEXTURE_2D, wall_tex);
+
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
+				glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
+
+				glm::mat4 pv = perspective * view;
+				for (u32 i = 0; i < sizeof(cube_points) / 3; i++) {
+					local_cube_points[i] = local_cube_points[i] * glm::vec3(p.x * 2.0f - map_width, p.z * 2.0f, p.y * 2.0f - map_height);
 				}
 
-				glm::mat4 mvp = perspective * view * model;
-				glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]);
+				glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
+				glVertexAttribPointer(obj_attribs->points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0);
+				glBufferData(GL_ARRAY_BUFFER, sizeof(cube_points) / 3, local_cube_points, GL_STREAM_DRAW);
+
+				glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &pv[0][0]);
 				glUniform1i(obj_tile_data_uniform, i);
 				glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0);
 			}
@@ -666,6 +661,5 @@ int main() {
 	}
 
 	SDL_Quit();
-
 	return 0;
 }

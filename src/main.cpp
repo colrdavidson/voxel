@@ -33,6 +33,7 @@ int main() {
 	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
 	GLuint obj_shader_program = load_and_build_program("src/obj_vert.vsh", "src/obj_frag.fsh");
+	GLuint ui_shader_program = load_and_build_program("src/ui_vert.vsh", "src/ui_frag.fsh");
 
 	GLuint frame_buffer = 0;
 	GLuint depth_buffer = 0;
@@ -56,9 +57,16 @@ int main() {
 	GLint obj_color_index = glGetFragDataLocation(obj_shader_program, "color");
 	GLint obj_click_index = glGetFragDataLocation(obj_shader_program, "click");
 
+	GLint ui_color_index = glGetFragDataLocation(ui_shader_program, "color");
+	GLint ui_click_index = glGetFragDataLocation(ui_shader_program, "click");
+
 	GLenum obj_buffers[2];
 	obj_buffers[obj_color_index] = GL_COLOR_ATTACHMENT0;
 	obj_buffers[obj_click_index] = GL_COLOR_ATTACHMENT1;
+
+	GLenum ui_buffers[2];
+	ui_buffers[ui_color_index] = GL_COLOR_ATTACHMENT0;
+	ui_buffers[ui_click_index] = GL_COLOR_ATTACHMENT1;
 
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));
@@ -69,18 +77,6 @@ int main() {
 	if (status != GL_FRAMEBUFFER_COMPLETE) {
 		return 1;
 	}
-
-	GLuint wall_tex;
-	SDL_Surface *wall_surf = IMG_Load("assets/grass.png");
-	glGenTextures(1, &wall_tex);
-	glBindTexture(GL_TEXTURE_2D, wall_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, wall_surf->w, wall_surf->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, wall_surf->pixels);
-
-	SDL_FreeSurface(wall_surf);
 
 	GLuint vao = 0;
 	glGenVertexArrays(1, &vao);
@@ -102,20 +98,49 @@ int main() {
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_indices), cube_indices, GL_STATIC_DRAW);
 
 	GLuint points_attr = glGetAttribLocation(obj_shader_program, "coords");
-	GLuint texpos_attr = glGetAttribLocation(obj_shader_program, "tex_coords");
 	GLuint normals_attr = glGetAttribLocation(obj_shader_program, "normals");
 	GLuint tile_data_attr = glGetAttribLocation(obj_shader_program, "tile_data");
 	GLuint tile_color_attr = glGetAttribLocation(obj_shader_program, "color");
 	GLuint mvp_attr = glGetAttribLocation(obj_shader_program, "mvp");
 
+	GLuint vbo_rect_points;
+	glGenBuffers(1, &vbo_rect_points);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_rect_points);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(rect_points), rect_points, GL_STATIC_DRAW);
+
+	GLuint vbo_rect_normals;
+	glGenBuffers(1, &vbo_rect_normals);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_rect_normals);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(rect_normals), rect_normals, GL_STATIC_DRAW);
+
+	GLuint ibo_rect_indices;
+	glGenBuffers(1, &ibo_rect_indices);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_rect_indices);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(rect_indices), rect_indices, GL_STATIC_DRAW);
+
+	GLuint ui_points_attr = glGetAttribLocation(ui_shader_program, "coords");
+	GLuint ui_normals_attr = glGetAttribLocation(ui_shader_program, "normals");
+
+	GLuint ui_mvp_uniform = glGetUniformLocation(ui_shader_program, "mvp");
+	GLuint ui_tile_data_uniform = glGetUniformLocation(ui_shader_program, "tile_data");
+
 	glViewport(0, 0, screen_width, screen_height);
 
 	u32 map_width = 16 * 5;
-	u32 map_height = 16;
+	u32 map_height = 16 * 2;
 	u32 map_depth = 16 * 5;
 	u32 map_size = map_width * map_height * map_depth;
+	u32 top_layer = map_height / 2;
+
 	u8 *map = (u8 *)malloc(map_size);
-	memset(map, 1, map_size);
+	memset(map, 0, map_size);
+
+	for (u32 i = 0; i < map_size; i++) {
+		Point p = oned_to_threed(i, map_width, map_height);
+		if (p.y <= top_layer) {
+			map[i] = 1;
+		}
+	}
 
 	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
 	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
@@ -136,7 +161,7 @@ int main() {
 	f32 current_time = (f32)SDL_GetTicks() / 60.0;
 	f32 t = 0.0;
 
-	glm::vec3 camera_pos = glm::vec3(map_width / 2, map_height + 3.0, map_depth / 2);
+	glm::vec3 camera_pos = glm::vec3(map_width / 2, top_layer + 3.0, map_depth / 2);
 	glm::vec3 camera_front = glm::vec3(0.0, 0.0, 1.0);
 	glm::vec3 camera_up = glm::vec3(0.0, 1.0, 0.0);
 
@@ -200,7 +225,7 @@ int main() {
 						f32 x_off = mouse_x;
 						f32 y_off = -mouse_y;
 
-						f32 mouse_speed = 0.25;
+						f32 mouse_speed = 0.20;
 						x_off *= mouse_speed;
 						y_off *= mouse_speed;
 
@@ -259,27 +284,21 @@ int main() {
 						switch (side) {
 							case 0: {
 								z_adj = 1;
-								puts("front");
 							} break;
 							case 1: {
 								y_adj = 1;
-								puts("top");
 							} break;
 							case 2: {
 								z_adj = -1;
-								puts("back");
 							} break;
 							case 3: {
 								y_adj = -1;
-								puts("bottom");
 							} break;
 							case 4: {
 								x_adj = -1;
-								puts("left");
 							} break;
 							case 5: {
 								x_adj = 1;
-								puts("right");
 							} break;
 							default: {
 								puts("not a valid side");
@@ -287,8 +306,6 @@ int main() {
 							}
 						}
 
-						printf("(%d, %d, %d) -> (%d, %d, %d)\n", p.x, p.y, p.z, p.x + x_adj, p.y + y_adj, p.z + z_adj);
-						printf("%d\n", map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)]);
 						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
 					}
 				} break;
@@ -358,8 +375,10 @@ int main() {
 				model = glm::translate(model, glm::vec3(p.x, p.y, p.z));
 				glm::mat4 mvp = pv * model;
 
-				if (p.y == map_height - 1) {
+				if (p.y == top_layer) {
 					colors[i] = glm::vec3(0.2, 0.7, 0.2);
+				} else if (p.y > top_layer) {
+					colors[i] = glm::vec3(0.3, 0.3, 0.3);
 				} else {
 					colors[i] = glm::vec3(0.5, 0.35, 0.05);
 				}
@@ -384,11 +403,24 @@ int main() {
 
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
 
-		glDisableVertexAttribArray(points_attr);
-		glDisableVertexAttribArray(tile_color_attr);
-		glDisableVertexAttribArray(normals_attr);
-		glDisableVertexAttribArray(tile_data_attr);
-		glDisableVertexAttribArray(mvp_attr);
+		glClear(GL_DEPTH_BUFFER_BIT);
+		glDisable(GL_DEPTH_TEST);
+
+        colors[0] = glm::vec3(1.0, 1.0, 1.0);
+		mvps[0] = glm::ortho(-5.0f, 5.0f, -5.0f, 5.0f, -1.0f, 1.0f);
+		mvps[0] = glm::scale(mvps[0], glm::vec3(0.1f, 0.1f, 0.0f));
+		mvps[0] = glm::translate(mvps[0], glm::vec3(0.1f, 0.0f, 0.0f));
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), colors, GL_STREAM_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(i32), tile_data, GL_STREAM_DRAW);
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4), mvps, GL_STREAM_DRAW);
+
+		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, 1));
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 		glReadBuffer(GL_COLOR_ATTACHMENT0);

@@ -91,11 +91,6 @@ int main() {
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(cube_points), cube_points, GL_STATIC_DRAW);
 
-	GLuint vbo_cube_tex_coords;
-	glGenBuffers(1, &vbo_cube_tex_coords);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords);
-	GL_CHECK(glBufferData(GL_ARRAY_BUFFER, sizeof(cube_tex_coords), cube_tex_coords, GL_STATIC_DRAW));
-
 	GLuint vbo_cube_normals;
 	glGenBuffers(1, &vbo_cube_normals);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals);
@@ -106,14 +101,12 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cube_indices), cube_indices, GL_STATIC_DRAW);
 
-
 	GLuint points_attr = glGetAttribLocation(obj_shader_program, "coords");
 	GLuint texpos_attr = glGetAttribLocation(obj_shader_program, "tex_coords");
 	GLuint normals_attr = glGetAttribLocation(obj_shader_program, "normals");
 	GLuint tile_data_attr = glGetAttribLocation(obj_shader_program, "tile_data");
+	GLuint tile_color_attr = glGetAttribLocation(obj_shader_program, "color");
 	GLuint mvp_attr = glGetAttribLocation(obj_shader_program, "mvp");
-
-	GLint obj_tex_uniform = glGetUniformLocation(obj_shader_program, "tex");
 
 	glViewport(0, 0, screen_width, screen_height);
 
@@ -125,6 +118,7 @@ int main() {
 	memset(map, 1, map_size);
 
 	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
+	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
 	GLuint vbo_mvps;
@@ -135,17 +129,24 @@ int main() {
 	glGenBuffers(1, &vbo_tile_data);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 
+	GLuint vbo_tile_color;
+	glGenBuffers(1, &vbo_tile_color);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
+
 	f32 current_time = (f32)SDL_GetTicks() / 60.0;
 	f32 t = 0.0;
 
-	glm::vec3 camera_pos = glm::vec3(map_width / 2, map_height + 1.0, map_depth / 2);
+	glm::vec3 camera_pos = glm::vec3(map_width / 2, map_height + 3.0, map_depth / 2);
 	glm::vec3 camera_front = glm::vec3(0.0, 0.0, 1.0);
 	glm::vec3 camera_up = glm::vec3(0.0, 1.0, 0.0);
 
 	f32 yaw = 0.0f;
 	f32 pitch = 0.0f;
 
+	Point hovered;
+
 	u8 warped = false;
+	u8 warp = false;
 	u8 running = true;
 	while (running) {
 		SDL_Event event;
@@ -178,8 +179,9 @@ int main() {
 			switch (event.type) {
 				case SDL_KEYDOWN: {
 					switch (event.key.keysym.sym) {
-						case SDLK_f: {
-							t = 0;
+						case SDLK_ESCAPE: {
+							warp = false;
+							SDL_SetRelativeMouseMode(SDL_FALSE);
 						} break;
 					}
 				} break;
@@ -187,6 +189,13 @@ int main() {
 					if (!warped) {
 						i32 mouse_x, mouse_y;
 						SDL_GetRelativeMouseState(&mouse_x, &mouse_y);
+
+						if (warp) {
+							SDL_WarpMouseInWindow(window, screen_width / 2, screen_height / 2);
+							warped = true;
+						} else {
+							continue;
+						}
 
 						f32 x_off = mouse_x;
 						f32 y_off = -mouse_y;
@@ -204,20 +213,6 @@ int main() {
 							pitch = -89.0f;
 
 						glm::vec3 front = glm::vec3(cos(glm::radians(yaw)) * cos(glm::radians(pitch)), sin(glm::radians(pitch)), sin(glm::radians(yaw)) * cos(glm::radians(pitch)));
-						camera_front = front;
-
-						SDL_WarpMouseInWindow(window, screen_width / 2, screen_height / 2);
-						warped = true;
-					} else {
-						warped = false;
-					}
-				} break;
-				case SDL_MOUSEBUTTONDOWN: {
-					i32 mouse_x, mouse_y;
-					u32 buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
-					SDL_SetRelativeMouseMode(SDL_TRUE);
-
-					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
 
 						i32 data = 0;
 						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
@@ -226,8 +221,21 @@ int main() {
 
 						u32 pos = (u32)data >> 3;
 
-						Point p = oned_to_threed(pos, map_width, map_height);
-						printf("%f, %f, %f | %d, %d, %d\n", camera_pos.x, camera_pos.y, camera_pos.z, p.x, p.y, p.z);
+						hovered = oned_to_threed(pos, map_width, map_height);
+
+						camera_front = front;
+					} else {
+						warped = false;
+					}
+				} break;
+				case SDL_MOUSEBUTTONDOWN: {
+					i32 mouse_x, mouse_y;
+					u32 buttons = SDL_GetMouseState(&mouse_x, &mouse_y);
+					SDL_SetRelativeMouseMode(SDL_TRUE);
+					warp = true;
+
+					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+						u32 pos = threed_to_oned(hovered.x, hovered.y, hovered.z, map_width, map_height);
 
 						if (pos < map_size) {
 							map[pos] = 0;
@@ -250,28 +258,37 @@ int main() {
 
 						switch (side) {
 							case 0: {
-								y_adj = 1;
+								z_adj = 1;
+								puts("front");
 							} break;
 							case 1: {
-								z_adj = 1;
+								y_adj = 1;
+								puts("top");
 							} break;
 							case 2: {
-								y_adj = -1;
+								z_adj = -1;
+								puts("back");
 							} break;
 							case 3: {
-								z_adj = -1;
+								y_adj = -1;
+								puts("bottom");
 							} break;
 							case 4: {
 								x_adj = -1;
+								puts("left");
 							} break;
 							case 5: {
 								x_adj = 1;
+								puts("right");
 							} break;
 							default: {
 								puts("not a valid side");
 								return 1;
 							}
 						}
+
+						printf("(%d, %d, %d) -> (%d, %d, %d)\n", p.x, p.y, p.z, p.x + x_adj, p.y + y_adj, p.z + z_adj);
+						printf("%d\n", map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)]);
 						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
 					}
 				} break;
@@ -284,7 +301,7 @@ int main() {
 
 		glEnable(GL_DEPTH_TEST);
 		glm::mat4 perspective;
-		perspective = glm::perspective(glm::radians(40.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
+		perspective = glm::perspective(glm::radians(50.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
 
 		glm::mat4 view;
 		view = glm::lookAt(camera_pos, camera_pos + camera_front, camera_up);
@@ -296,28 +313,25 @@ int main() {
 		glUseProgram(obj_shader_program);
 
 		glEnableVertexAttribArray(points_attr);
-		glEnableVertexAttribArray(texpos_attr);
+		glEnableVertexAttribArray(tile_color_attr);
 		glEnableVertexAttribArray(normals_attr);
 		glEnableVertexAttribArray(tile_data_attr);
 		glEnableVertexAttribArray(mvp_attr);
 
 		i32 size;
 
-		GL_CHECK(glActiveTexture(GL_TEXTURE0));
-		GL_CHECK(glUniform1i(obj_tex_uniform, 0));
-
 		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_points));
 		GL_CHECK(glVertexAttribPointer(points_attr, 3, GL_FLOAT, GL_FALSE, 0, 0));
-		GL_CHECK(glBindTexture(GL_TEXTURE_2D, wall_tex));
 
 		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_normals));
 		GL_CHECK(glVertexAttribPointer(normals_attr, 3, GL_FLOAT, GL_FALSE, 0, 0));
 
-		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_cube_tex_coords));
-		GL_CHECK(glVertexAttribPointer(texpos_attr, 2, GL_FLOAT, GL_FALSE, 0, 0));
-
 		GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_cube_indices));
 		GL_CHECK(glGetBufferParameteriv(GL_ELEMENT_ARRAY_BUFFER, GL_BUFFER_SIZE, &size));
+
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color));
+		GL_CHECK(glVertexAttribPointer(tile_color_attr, 3, GL_FLOAT, GL_FALSE, 0, 0));
+		GL_CHECK(glVertexAttribDivisor(tile_color_attr, 1));
 
 		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data));
 		GL_CHECK(glVertexAttribIPointer(tile_data_attr, 1, GL_INT, 0, NULL));
@@ -333,6 +347,7 @@ int main() {
 		glm::mat4 pv = perspective * view;
 		memset(mvps, 0, sizeof(glm::mat4) * map_size);
 		memset(tile_data, 0, sizeof(i32) * map_size);
+		memset(colors, 0, sizeof(glm::vec3) * map_size);
 		for (u32 i = 0; i < map_size; i++) {
 			u32 tile_id = map[i];
 			if (tile_id != 0) {
@@ -343,10 +358,23 @@ int main() {
 				model = glm::translate(model, glm::vec3(p.x, p.y, p.z));
 				glm::mat4 mvp = pv * model;
 
+				if (p.y == map_height - 1) {
+					colors[i] = glm::vec3(0.2, 0.7, 0.2);
+				} else {
+					colors[i] = glm::vec3(0.5, 0.35, 0.05);
+				}
+
+				if (point_eq(p, hovered)) {
+                	colors[i] += glm::vec3(0.1, 0.1, 0.1);
+				}
+
 				mvps[i] = mvp;
 				tile_data[i] = i;
 			}
 		}
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * map_size, colors, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
@@ -354,17 +382,10 @@ int main() {
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
 
-		/*
-		   GL_CHECK(glUniformMatrix4fv(obj_mvp_uniform, 1, GL_FALSE, &mvp[0][0]));
-		   GL_CHECK(glUniform1i(obj_tile_data_uniform, i));
-
-		   GL_CHECK(glDrawElements(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0));
-		*/
-
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
 
 		glDisableVertexAttribArray(points_attr);
-		glDisableVertexAttribArray(texpos_attr);
+		glDisableVertexAttribArray(tile_color_attr);
 		glDisableVertexAttribArray(normals_attr);
 		glDisableVertexAttribArray(tile_data_attr);
 		glDisableVertexAttribArray(mvp_attr);

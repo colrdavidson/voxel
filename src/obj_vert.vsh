@@ -2,18 +2,18 @@
 
 in vec3 coords;
 in vec3 normals;
-in vec2 tex_coords;
+in vec3 color;
 
 in int tile_data;
 in mat4 mvp;
 
 flat out int f_tile_data;
-out vec2 f_tex_coords;
+out vec3 f_color;
 out vec3 f_normals;
 
 void main() {
 	gl_Position = mvp * vec4(coords, 1.0);
-	f_tex_coords = tex_coords;
+	f_color = color;
 	f_normals = normals;
 
 	int x = int(normals.x) * 4;

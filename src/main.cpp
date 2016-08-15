@@ -319,6 +319,9 @@ int main() {
 
 						if (pos < map_size) {
 							map[pos] = 0;
+							memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
+							memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
+							memset(colors, 0, sizeof(glm::vec3) * r_map.num_blocks);
 							r_map = hull_map(map, map_width, map_height, map_depth);
 						} else {
 							printf("%u\n", pos);
@@ -363,6 +366,9 @@ int main() {
 						}
 
 						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
+						memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
+						memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
+						memset(colors, 0, sizeof(glm::vec3) * r_map.num_blocks);
 						r_map = hull_map(map, map_width, map_height, map_depth);
 					}
 				} break;
@@ -419,9 +425,6 @@ int main() {
 		}
 
 		glm::mat4 pv = perspective * view;
-		memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
-		memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
-		memset(colors, 0, sizeof(glm::vec3) * r_map.num_blocks);
 
 		u32 tile_index = 0;
 		for (u32 i = 0; i < map_size; i++) {

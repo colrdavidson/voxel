@@ -183,7 +183,7 @@ int main() {
 	u32 map_height = 256;
 	u32 map_depth = 16;
 	u32 map_size = map_width * map_height * map_depth;
-	u32 top_layer = map_height - 1;
+	u32 top_layer = (map_height - 1) / 2;
 
 	u8 *map = (u8 *)malloc(map_size);
 	memset(map, 0, map_size);

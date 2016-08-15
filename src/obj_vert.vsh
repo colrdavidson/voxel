@@ -7,12 +7,14 @@ in vec3 color;
 in int tile_data;
 in mat4 model;
 
+uniform mat4 pv;
+
 flat out int f_tile_data;
 out vec3 f_color;
 out vec3 f_normals;
 
 void main() {
-	gl_Position = model * vec4(coords, 1.0);
+	gl_Position = pv * model * vec4(coords, 1.0);
 	f_color = color;
 	f_normals = normals;
 

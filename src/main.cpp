@@ -27,7 +27,7 @@ bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 
 }
 
 bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, Point p) {
-    if (p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.z == (map_depth - 1) || p.z == 0) {
+    if (p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.y == 0 || p.z == (map_depth - 1) || p.z == 0) {
 		return true;
 	} else {
 		if (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 ||
@@ -64,6 +64,26 @@ RenderableMap hull_map(u8 *map, u32 map_width, u32 map_height, u32 map_depth) {
 	r_map.num_blocks = block_count;
 
 	return r_map;
+}
+
+void update_map(glm::mat4 *model, i32 *tile_data, u32 map_width, u32 map_height, u32 map_depth, u32 top_layer, RenderableMap r_map, Point hovered) {
+	u32 map_size = map_height * map_width * map_depth;
+	u32 tile_index = 0;
+	for (u32 i = 0; i < map_size; i++) {
+		u32 tile_id = r_map.blocks[i];
+		if (tile_id != 0) {
+			Point p = oned_to_threed(i, map_width, map_height);
+
+			glm::mat4 m = glm::mat4(1.0);
+
+			m = glm::translate(m, glm::vec3(p.x, p.y, p.z));
+
+			model[tile_index] = m;
+			tile_data[tile_index] = i;
+
+			tile_index++;
+		}
+	}
 }
 
 int main() {
@@ -171,11 +191,7 @@ int main() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo_rect_indices);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(rect_indices), rect_indices, GL_STATIC_DRAW);
 
-	GLuint ui_points_attr = glGetAttribLocation(ui_shader_program, "coords");
-	GLuint ui_normals_attr = glGetAttribLocation(ui_shader_program, "normals");
-
-	GLuint ui_mvp_uniform = glGetUniformLocation(obj_shader_program, "model");
-	GLuint ui_tile_data_uniform = glGetUniformLocation(ui_shader_program, "tile_data");
+	GLuint pv_uniform = glGetUniformLocation(obj_shader_program, "pv");
 
 	glViewport(0, 0, screen_width, screen_height);
 
@@ -201,6 +217,9 @@ int main() {
 	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
+	Point hovered = new_point(0, 0, 0);
+	update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map, hovered);
+
 	GLuint vbo_model;
 	glGenBuffers(1, &vbo_model);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
@@ -222,8 +241,6 @@ int main() {
 
 	f32 yaw = 0.0f;
 	f32 pitch = 0.0f;
-
-	Point hovered;
 
 	glEnable(GL_CULL_FACE);
 
@@ -321,8 +338,8 @@ int main() {
 							map[pos] = 0;
 							memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
 							memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
-							memset(colors, 0, sizeof(glm::vec3) * r_map.num_blocks);
 							r_map = hull_map(map, map_width, map_height, map_depth);
+							update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map, hovered);
 						} else {
 							printf("%u\n", pos);
 						}
@@ -368,8 +385,8 @@ int main() {
 						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
 						memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
 						memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
-						memset(colors, 0, sizeof(glm::vec3) * r_map.num_blocks);
 						r_map = hull_map(map, map_width, map_height, map_depth);
+						update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map, hovered);
 					}
 				} break;
 				case SDL_QUIT: {
@@ -380,11 +397,6 @@ int main() {
 
 
 		glEnable(GL_DEPTH_TEST);
-		glm::mat4 perspective;
-		perspective = glm::perspective(glm::radians(50.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
-
-		glm::mat4 view;
-		view = glm::lookAt(camera_pos, camera_pos + camera_front, camera_up);
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -424,6 +436,11 @@ int main() {
 			GL_CHECK(glVertexAttribDivisor(model_attr + i, 1));
 		}
 
+		glm::mat4 perspective;
+		perspective = glm::perspective(glm::radians(45.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
+		glm::mat4 view;
+		view = glm::lookAt(camera_pos, camera_pos + camera_front, camera_up);
+
 		glm::mat4 pv = perspective * view;
 
 		u32 tile_index = 0;
@@ -431,10 +448,6 @@ int main() {
 			u32 tile_id = r_map.blocks[i];
 			if (tile_id != 0) {
 				Point p = oned_to_threed(i, map_width, map_height);
-
-				glm::mat4 m = glm::mat4(1.0);
-
-				m = glm::translate(m, glm::vec3(p.x, p.y, p.z));
 
 				if (p.y == top_layer) {
 					colors[tile_index] = glm::vec3(0.2, 0.7, 0.2);
@@ -445,18 +458,15 @@ int main() {
 				}
 
 				if (point_eq(p, hovered)) {
-                	colors[tile_index] += glm::vec3(0.1, 0.1, 0.1);
+					colors[tile_index] += glm::vec3(0.1, 0.1, 0.1);
 				}
-
-				model[tile_index] = pv * m;
-				tile_data[tile_index] = i;
 
 				tile_index++;
 			}
 		}
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * r_map.num_blocks, colors, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * tile_index, colors, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * r_map.num_blocks, tile_data, GL_STREAM_DRAW);
@@ -464,13 +474,16 @@ int main() {
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * r_map.num_blocks, model, GL_STREAM_DRAW);
 
+		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, r_map.num_blocks));
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 
         colors[0] = glm::vec3(1.0, 1.0, 1.0);
-		model[0] = glm::ortho(-5.0f, 5.0f, -5.0f, 5.0f, -1.0f, 1.0f);
+		pv = glm::ortho(-5.0f, 5.0f, -5.0f, 5.0f, -1.0f, 1.0f);
+
+		model[0] = glm::mat4(1.0);
 		model[0] = glm::scale(model[0], glm::vec3(0.1f, 0.1f, 0.0f));
 		model[0] = glm::translate(model[0], glm::vec3(0.1f, 0.0f, 0.0f));
 
@@ -483,6 +496,7 @@ int main() {
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4), model, GL_STREAM_DRAW);
 
+		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, 1));
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);

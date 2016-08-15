@@ -13,6 +13,42 @@
 #include "tga.h"
 #include "gl_helper.h"
 
+typedef struct RenderableMap {
+	u8 *blocks;
+	u64 num_blocks;
+} RenderableMap;
+
+bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 z) {
+	if (x < map_width && y < map_height && z < map_depth) {
+		return true;
+	}
+
+	return false;
+}
+
+RenderableMap hull_map(u8 *map, u32 map_width, u32 map_height, u32 map_depth) {
+	u32 map_size = map_height * map_width * map_depth;
+
+	u8 *render_map = (u8 *)malloc(map_size);
+	memset(render_map, 0, map_size);
+
+	u64 block_count = 0;
+	for (u32 i = 0; i < map_size; i++) {
+		Point p = oned_to_threed(i, map_width, map_height);
+
+        if ((p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.z == (map_depth - 1) || p.z == 0) && map[i] == 1) {
+			render_map[i] = 1;
+			block_count += 1;
+		}
+	}
+
+	RenderableMap r_map;
+	r_map.blocks = render_map;
+	r_map.num_blocks = block_count;
+
+	return r_map;
+}
+
 int main() {
 	SDL_Init(SDL_INIT_VIDEO);
 
@@ -101,7 +137,7 @@ int main() {
 	GLuint normals_attr = glGetAttribLocation(obj_shader_program, "normals");
 	GLuint tile_data_attr = glGetAttribLocation(obj_shader_program, "tile_data");
 	GLuint tile_color_attr = glGetAttribLocation(obj_shader_program, "color");
-	GLuint mvp_attr = glGetAttribLocation(obj_shader_program, "mvp");
+	GLuint model_attr = glGetAttribLocation(obj_shader_program, "model");
 
 	GLuint vbo_rect_points;
 	glGenBuffers(1, &vbo_rect_points);
@@ -121,16 +157,16 @@ int main() {
 	GLuint ui_points_attr = glGetAttribLocation(ui_shader_program, "coords");
 	GLuint ui_normals_attr = glGetAttribLocation(ui_shader_program, "normals");
 
-	GLuint ui_mvp_uniform = glGetUniformLocation(ui_shader_program, "mvp");
+	GLuint ui_mvp_uniform = glGetUniformLocation(obj_shader_program, "model");
 	GLuint ui_tile_data_uniform = glGetUniformLocation(ui_shader_program, "tile_data");
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	u32 map_width = 16 * 5;
-	u32 map_height = 16 * 2;
-	u32 map_depth = 16 * 5;
+	u32 map_width = 16 * 21;
+	u32 map_height = 256;
+	u32 map_depth = 16 * 21;
 	u32 map_size = map_width * map_height * map_depth;
-	u32 top_layer = map_height / 2;
+	u32 top_layer = map_height - 1;
 
 	u8 *map = (u8 *)malloc(map_size);
 	memset(map, 0, map_size);
@@ -142,13 +178,15 @@ int main() {
 		}
 	}
 
-	glm::mat4 *mvps = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
-	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
-	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
+	RenderableMap r_map = hull_map(map, map_width, map_height, map_depth);
 
-	GLuint vbo_mvps;
-	glGenBuffers(1, &vbo_mvps);
-	glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
+	glm::mat4 *model = (glm::mat4 *)malloc(sizeof(glm::mat4) * r_map.num_blocks);
+	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * r_map.num_blocks);
+	i32 *tile_data = (i32 *)malloc(sizeof(i32) * r_map.num_blocks);
+
+	GLuint vbo_model;
+	glGenBuffers(1, &vbo_model);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
 
 	GLuint vbo_tile_data;
 	glGenBuffers(1, &vbo_tile_data);
@@ -169,6 +207,8 @@ int main() {
 	f32 pitch = 0.0f;
 
 	Point hovered;
+
+	glEnable(GL_CULL_FACE);
 
 	u8 warped = false;
 	u8 warp = false;
@@ -197,8 +237,6 @@ int main() {
 		if (state[SDL_SCANCODE_D]) {
 			camera_pos += glm::normalize(glm::cross(camera_front, camera_up)) * cam_speed * dt;
 		}
-
-		camera_pos.y = saved_y;
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
@@ -264,6 +302,7 @@ int main() {
 
 						if (pos < map_size) {
 							map[pos] = 0;
+							r_map = hull_map(map, map_width, map_height, map_depth);
 						} else {
 							printf("%u\n", pos);
 						}
@@ -307,6 +346,7 @@ int main() {
 						}
 
 						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
+						r_map = hull_map(map, map_width, map_height, map_depth);
 					}
 				} break;
 				case SDL_QUIT: {
@@ -333,7 +373,7 @@ int main() {
 		glEnableVertexAttribArray(tile_color_attr);
 		glEnableVertexAttribArray(normals_attr);
 		glEnableVertexAttribArray(tile_data_attr);
-		glEnableVertexAttribArray(mvp_attr);
+		glEnableVertexAttribArray(model_attr);
 
 		i32 size;
 
@@ -354,62 +394,65 @@ int main() {
 		GL_CHECK(glVertexAttribIPointer(tile_data_attr, 1, GL_INT, 0, NULL));
 		GL_CHECK(glVertexAttribDivisor(tile_data_attr, 1));
 
-		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps));
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, vbo_model));
 		for (u32 i = 0; i < 4; i++) {
-			GL_CHECK(glVertexAttribPointer(mvp_attr + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void *)(sizeof(glm::vec4) * i)));
-			GL_CHECK(glEnableVertexAttribArray(mvp_attr + i));
-			GL_CHECK(glVertexAttribDivisor(mvp_attr + i, 1));
+			GL_CHECK(glVertexAttribPointer(model_attr + i, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void *)(sizeof(glm::vec4) * i)));
+			GL_CHECK(glEnableVertexAttribArray(model_attr + i));
+			GL_CHECK(glVertexAttribDivisor(model_attr + i, 1));
 		}
 
 		glm::mat4 pv = perspective * view;
-		memset(mvps, 0, sizeof(glm::mat4) * map_size);
-		memset(tile_data, 0, sizeof(i32) * map_size);
-		memset(colors, 0, sizeof(glm::vec3) * map_size);
+		memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
+		memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
+		memset(colors, 0, sizeof(glm::vec3) * r_map.num_blocks);
+
+		u32 tile_index = 0;
 		for (u32 i = 0; i < map_size; i++) {
-			u32 tile_id = map[i];
+			u32 tile_id = r_map.blocks[i];
 			if (tile_id != 0) {
 				Point p = oned_to_threed(i, map_width, map_height);
 
-				glm::mat4 model = glm::mat4(1.0);
+				glm::mat4 m = glm::mat4(1.0);
 
-				model = glm::translate(model, glm::vec3(p.x, p.y, p.z));
-				glm::mat4 mvp = pv * model;
+				m = glm::translate(m, glm::vec3(p.x, p.y, p.z));
 
 				if (p.y == top_layer) {
-					colors[i] = glm::vec3(0.2, 0.7, 0.2);
+					colors[tile_index] = glm::vec3(0.2, 0.7, 0.2);
 				} else if (p.y > top_layer) {
-					colors[i] = glm::vec3(0.3, 0.3, 0.3);
+					colors[tile_index] = glm::vec3(0.3, 0.3, 0.3);
 				} else {
-					colors[i] = glm::vec3(0.5, 0.35, 0.05);
+					colors[tile_index] = glm::vec3(0.5, 0.35, 0.05);
 				}
 
 				if (point_eq(p, hovered)) {
-                	colors[i] += glm::vec3(0.1, 0.1, 0.1);
+                	colors[tile_index] += glm::vec3(0.1, 0.1, 0.1);
 				}
 
-				mvps[i] = mvp;
-				tile_data[i] = i;
+				model[tile_index] = pv * m;
+				tile_data[tile_index] = i;
+
+				tile_index++;
 			}
 		}
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * map_size, colors, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * r_map.num_blocks, colors, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * map_size, tile_data, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * r_map.num_blocks, tile_data, GL_STREAM_DRAW);
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * map_size, mvps, GL_STREAM_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * r_map.num_blocks, model, GL_STREAM_DRAW);
 
-		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, map_size));
+		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, r_map.num_blocks));
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 
         colors[0] = glm::vec3(1.0, 1.0, 1.0);
-		mvps[0] = glm::ortho(-5.0f, 5.0f, -5.0f, 5.0f, -1.0f, 1.0f);
-		mvps[0] = glm::scale(mvps[0], glm::vec3(0.1f, 0.1f, 0.0f));
-		mvps[0] = glm::translate(mvps[0], glm::vec3(0.1f, 0.0f, 0.0f));
+		model[0] = glm::ortho(-5.0f, 5.0f, -5.0f, 5.0f, -1.0f, 1.0f);
+		model[0] = glm::scale(model[0], glm::vec3(0.1f, 0.1f, 0.0f));
+		model[0] = glm::translate(model[0], glm::vec3(0.1f, 0.0f, 0.0f));
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), colors, GL_STREAM_DRAW);
@@ -417,8 +460,8 @@ int main() {
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(i32), tile_data, GL_STREAM_DRAW);
 
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_mvps);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4), mvps, GL_STREAM_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4), model, GL_STREAM_DRAW);
 
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, 1));
 

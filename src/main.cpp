@@ -26,6 +26,22 @@ bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 
 	return false;
 }
 
+bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, Point p) {
+    if (p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.z == (map_depth - 1) || p.z == 0) {
+		return true;
+	} else {
+		if (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 ||
+			map[threed_to_oned(p.x - 1, p.y, p.z, map_width, map_height)] == 0 ||
+			map[threed_to_oned(p.x, p.y + 1, p.z, map_width, map_height)] == 0 ||
+			map[threed_to_oned(p.x, p.y - 1, p.z, map_width, map_height)] == 0 ||
+			map[threed_to_oned(p.x, p.y, p.z + 1, map_width, map_height)] == 0 ||
+			map[threed_to_oned(p.x, p.y, p.z - 1, map_width, map_height)] == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
 RenderableMap hull_map(u8 *map, u32 map_width, u32 map_height, u32 map_depth) {
 	u32 map_size = map_height * map_width * map_depth;
 
@@ -36,10 +52,11 @@ RenderableMap hull_map(u8 *map, u32 map_width, u32 map_height, u32 map_depth) {
 	for (u32 i = 0; i < map_size; i++) {
 		Point p = oned_to_threed(i, map_width, map_height);
 
-        if ((p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.z == (map_depth - 1) || p.z == 0) && map[i] == 1) {
+        if (map[i] == 1 && adjacent_to_air(map, map_width, map_height, map_depth, p)) {
 			render_map[i] = 1;
 			block_count += 1;
 		}
+
 	}
 
 	RenderableMap r_map;
@@ -162,9 +179,9 @@ int main() {
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	u32 map_width = 16 * 21;
+	u32 map_width = 16;
 	u32 map_height = 256;
-	u32 map_depth = 16 * 21;
+	u32 map_depth = 16;
 	u32 map_size = map_width * map_height * map_depth;
 	u32 top_layer = map_height - 1;
 
@@ -180,9 +197,9 @@ int main() {
 
 	RenderableMap r_map = hull_map(map, map_width, map_height, map_depth);
 
-	glm::mat4 *model = (glm::mat4 *)malloc(sizeof(glm::mat4) * r_map.num_blocks);
-	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * r_map.num_blocks);
-	i32 *tile_data = (i32 *)malloc(sizeof(i32) * r_map.num_blocks);
+	glm::mat4 *model = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
+	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
+	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
 	GLuint vbo_model;
 	glGenBuffers(1, &vbo_model);

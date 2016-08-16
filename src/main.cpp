@@ -15,6 +15,7 @@
 
 typedef struct RenderableMap {
 	u8 *blocks;
+	u8 *ao_map;
 	u64 num_blocks;
 } RenderableMap;
 
@@ -26,7 +27,8 @@ bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 
 	return false;
 }
 
-bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, Point p) {
+bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, u32 i) {
+	Point p = oned_to_threed(i, map_width, map_height);
     if (p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.y == 0 || p.z == (map_depth - 1) || p.z == 0) {
 		return true;
 	} else {
@@ -42,35 +44,37 @@ bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, Poin
 	return false;
 }
 
-RenderableMap hull_map(u8 *map, u32 map_width, u32 map_height, u32 map_depth) {
+
+
+RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_height, u32 map_depth) {
 	u32 map_size = map_height * map_width * map_depth;
 
-	u8 *render_map = (u8 *)malloc(map_size);
-	memset(render_map, 0, map_size);
+	if (r_map == NULL) {
+		r_map = (RenderableMap *)malloc(sizeof(RenderableMap));
+		r_map->blocks = (u8 *)malloc(map_size);
+	}
+
+	memset(r_map->blocks, 0, map_size);
 
 	u64 block_count = 0;
 	for (u32 i = 0; i < map_size; i++) {
-		Point p = oned_to_threed(i, map_width, map_height);
-
-        if (map[i] == 1 && adjacent_to_air(map, map_width, map_height, map_depth, p)) {
-			render_map[i] = 1;
+        if (map[i] == 1 && adjacent_to_air(map, map_width, map_height, map_depth, i)) {
+			r_map->blocks[i] = 1;
 			block_count += 1;
 		}
 
 	}
 
-	RenderableMap r_map;
-	r_map.blocks = render_map;
-	r_map.num_blocks = block_count;
+	r_map->num_blocks = block_count;
 
 	return r_map;
 }
 
-void update_map(glm::mat4 *model, i32 *tile_data, u32 map_width, u32 map_height, u32 map_depth, u32 top_layer, RenderableMap r_map, Point hovered) {
+void update_map(glm::mat4 *model, i32 *tile_data, u32 map_width, u32 map_height, u32 map_depth, u32 top_layer, RenderableMap *r_map) {
 	u32 map_size = map_height * map_width * map_depth;
 	u32 tile_index = 0;
 	for (u32 i = 0; i < map_size; i++) {
-		u32 tile_id = r_map.blocks[i];
+		u32 tile_id = r_map->blocks[i];
 		if (tile_id != 0) {
 			Point p = oned_to_threed(i, map_width, map_height);
 
@@ -203,14 +207,14 @@ int main() {
 		}
 	}
 
-	RenderableMap r_map = hull_map(map, map_width, map_height, map_depth);
+	RenderableMap *r_map = hull_map(map, NULL, map_width, map_height, map_depth);
 
 	glm::mat4 *model = (glm::mat4 *)malloc(sizeof(glm::mat4) * map_size);
 	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
 	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
 
 	Point hovered = new_point(0, 0, 0);
-	update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map, hovered);
+	update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map);
 
 	GLuint vbo_model;
 	glGenBuffers(1, &vbo_model);
@@ -238,6 +242,8 @@ int main() {
 
 	u8 warped = false;
 	u8 warp = false;
+	bool clicked = false;
+
 	u8 running = true;
 	while (running) {
 		SDL_Event event;
@@ -328,10 +334,12 @@ int main() {
 
 						if (pos < map_size) {
 							map[pos] = 0;
-							memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
-							memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
-							r_map = hull_map(map, map_width, map_height, map_depth);
-							update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map, hovered);
+							memset(model, 0, sizeof(glm::mat4) * r_map->num_blocks);
+							memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
+							r_map = hull_map(map, r_map, map_width, map_height, map_depth);
+							update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map);
+
+							clicked = true;
 						} else {
 							printf("%u\n", pos);
 						}
@@ -375,10 +383,10 @@ int main() {
 						}
 
 						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
-						memset(model, 0, sizeof(glm::mat4) * r_map.num_blocks);
-						memset(tile_data, 0, sizeof(i32) * r_map.num_blocks);
-						r_map = hull_map(map, map_width, map_height, map_depth);
-						update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map, hovered);
+						memset(model, 0, sizeof(glm::mat4) * r_map->num_blocks);
+						memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
+						r_map = hull_map(map, r_map, map_width, map_height, map_depth);
+						update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map);
 					}
 				} break;
 				case SDL_QUIT: {
@@ -437,7 +445,7 @@ int main() {
 
 		u32 tile_index = 0;
 		for (u32 i = 0; i < map_size; i++) {
-			u32 tile_id = r_map.blocks[i];
+			u32 tile_id = r_map->blocks[i];
 			if (tile_id != 0) {
 				Point p = oned_to_threed(i, map_width, map_height);
 
@@ -461,13 +469,26 @@ int main() {
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * tile_index, colors, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * r_map.num_blocks, tile_data, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * r_map->num_blocks, tile_data, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * r_map.num_blocks, model, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::mat4) * r_map->num_blocks, model, GL_STREAM_DRAW);
 
 		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
-		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, r_map.num_blocks));
+		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, r_map->num_blocks));
+
+		if (clicked) {
+			i32 data = 0;
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+			glReadBuffer(GL_COLOR_ATTACHMENT1);
+			glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+
+			u32 pos = (u32)data >> 3;
+			Point p = oned_to_threed(pos, map_width, map_height);
+			hovered = p;
+
+			clicked = false;
+		}
 
 		glClear(GL_DEPTH_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);

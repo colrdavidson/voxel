@@ -5,7 +5,7 @@ in vec3 normals;
 in vec3 color;
 
 in int tile_data;
-in mat4 model;
+in vec3 model;
 
 uniform mat4 pv;
 
@@ -14,9 +14,14 @@ out vec3 f_color;
 out vec3 f_normals;
 
 void main() {
-	gl_Position = pv * model * vec4(coords, 1.0);
+	mat4 m = mat4(vec4(1.0, 0.0, 0.0, 0.0),
+				  vec4(0.0, 1.0, 0.0, 0.0),
+				  vec4(0.0, 0.0, 1.0, 0.0),
+				  vec4(model, 1.0));
+
+	gl_Position = pv * m * vec4(coords, 1.0);
 	f_color = color;
-	f_normals = normals;
+	f_normals = normalize(transpose(inverse(mat3(m))) * normals);
 
 	int x = int(normals.x) * 4;
 	int y = int(normals.y) * 2;

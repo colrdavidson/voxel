@@ -12,6 +12,8 @@ typedef char i8;
 typedef float f32;
 typedef double f64;
 
+#define ARRAY_SIZE(x) sizeof(x) / sizeof(*x);
+
 // Allocates a string, must be freed by user
 char *file_to_string(const char *filename) {
 	FILE *file = fopen(filename, "r");

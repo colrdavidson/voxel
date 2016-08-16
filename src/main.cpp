@@ -106,7 +106,6 @@ int main() {
 	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 
 	GLuint obj_shader_program = load_and_build_program("src/obj_vert.vsh", "src/obj_frag.fsh");
-	GLuint ui_shader_program = load_and_build_program("src/ui_vert.vsh", "src/ui_frag.fsh");
 
 	GLuint frame_buffer = 0;
 	GLuint depth_buffer = 0;
@@ -130,16 +129,9 @@ int main() {
 	GLint obj_color_index = glGetFragDataLocation(obj_shader_program, "color");
 	GLint obj_click_index = glGetFragDataLocation(obj_shader_program, "click");
 
-	GLint ui_color_index = glGetFragDataLocation(ui_shader_program, "color");
-	GLint ui_click_index = glGetFragDataLocation(ui_shader_program, "click");
-
 	GLenum obj_buffers[2];
 	obj_buffers[obj_color_index] = GL_COLOR_ATTACHMENT0;
 	obj_buffers[obj_click_index] = GL_COLOR_ATTACHMENT1;
-
-	GLenum ui_buffers[2];
-	ui_buffers[ui_color_index] = GL_COLOR_ATTACHMENT0;
-	ui_buffers[ui_click_index] = GL_COLOR_ATTACHMENT1;
 
 	GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer));
 	GL_CHECK(glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, render_buffer));

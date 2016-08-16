@@ -57,11 +57,7 @@ u8 *generate_map(u32 map_width, u32 map_height, u32 map_depth) {
 	for (u64 x = 0; x < map_width; x++) {
 		for (u64 z = 0; z < map_depth; z++) {
 			for (u64 y = 0; y < height_map[twod_to_oned(x, z, map_width)]; y++) {
-				if (y > (u64)((f32)map_height * 0.55)) {
-					map[threed_to_oned(x, y, z, map_width, map_height)] = 1;
-				} else {
-					map[threed_to_oned(x, y, z, map_width, map_height)] = 2;
-				}
+				map[threed_to_oned(x, y, z, map_width, map_height)] = height_map[twod_to_oned(x, z, map_width)];
 			}
 		}
 	}
@@ -160,11 +156,9 @@ void update_map(glm::vec3 *model, i32 *tile_data, glm::vec3 *colors, u32 *mappin
 			model[tile_index] = m;
 			tile_data[tile_index] = i;
 
-            if (map[i] == 1) {
-				colors[tile_index] = glm::vec3(0.2, 0.5, 0.2);
-			} else {
-				colors[tile_index] = glm::vec3(0.0, 0.3, 0.0);
-			}
+ 			f32 height_mult = ((f32)map[i] / 255.0f);
+			height_mult *= height_mult;
+			colors[tile_index] = glm::vec3(0.1 * height_mult, 0.8 * height_mult, 0.1 * height_mult);
 
 
 			mappings[i] = tile_index;

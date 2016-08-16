@@ -382,12 +382,17 @@ int main() {
 							}
 						}
 
-						map[threed_to_oned(p.x + x_adj, p.y + y_adj, p.z + z_adj, map_width, map_height)] = 1;
-						memset(model, 0, sizeof(glm::mat4) * r_map->num_blocks);
-						memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
-						r_map = hull_map(map, r_map, map_width, map_height, map_depth);
-						update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map);
-						clicked = true;
+						p.x += x_adj;
+						p.y += y_adj;
+						p.z += z_adj;
+                        if (inside_map(map_width, map_height, map_depth, p.x, p.y, p.z)) {
+							map[threed_to_oned(p.x, p.y, p.z, map_width, map_height)] = 1;
+							memset(model, 0, sizeof(glm::mat4) * r_map->num_blocks);
+							memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
+							r_map = hull_map(map, r_map, map_width, map_height, map_depth);
+							update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map);
+							clicked = true;
+						}
 					}
 				} break;
 				case SDL_QUIT: {

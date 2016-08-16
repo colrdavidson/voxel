@@ -318,17 +318,7 @@ int main() {
 
 						glm::vec3 front = glm::vec3(cos(glm::radians(yaw)) * cos(glm::radians(pitch)), sin(glm::radians(pitch)), sin(glm::radians(yaw)) * cos(glm::radians(pitch)));
 
-						i32 data = 0;
-						glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
-						glReadBuffer(GL_COLOR_ATTACHMENT1);
-						glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
-
-						u32 pos = (u32)data >> 3;
-
-						colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
-						hovered = oned_to_threed(pos, map_width, map_height);
-						colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
-
+						clicked = true;
 						camera_front = front;
 					} else {
 						warped = false;
@@ -416,10 +406,25 @@ int main() {
 			}
 		}
 
+		if (clicked) {
 
-		u32 pre_render = SDL_GetTicks();
-		u32 post_render = SDL_GetTicks();
-		printf("render time: %u\n", post_render - pre_render);
+			i32 data = 0;
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+			glReadBuffer(GL_COLOR_ATTACHMENT1);
+			glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+
+			u32 pos = (u32)data >> 3;
+			Point p = oned_to_threed(pos, map_width, map_height);
+
+			colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
+			hovered = p;
+			colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
+
+			clicked = false;
+
+		}
+
+		//u32 pre_render = SDL_GetTicks();
 		glEnable(GL_DEPTH_TEST);
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
@@ -457,6 +462,7 @@ int main() {
 		GL_CHECK(glVertexAttribPointer(model_attr, 3, GL_FLOAT, GL_FALSE, 0, 0));
 		GL_CHECK(glVertexAttribDivisor(model_attr, 1));
 
+
 		glm::mat4 perspective;
 		perspective = glm::perspective(glm::radians(45.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
 		glm::mat4 view;
@@ -475,23 +481,6 @@ int main() {
 		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, (r_map->num_blocks + 1)));
 
-		if (clicked) {
-			i32 data = 0;
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
-			glReadBuffer(GL_COLOR_ATTACHMENT1);
-			glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
-
-			u32 pos = (u32)data >> 3;
-			Point p = oned_to_threed(pos, map_width, map_height);
-
-			colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
-			hovered = p;
-			colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
-
-			clicked = false;
-		}
-
-		glClear(GL_DEPTH_BUFFER_BIT);
 		glDisable(GL_DEPTH_TEST);
 
         colors[0] = glm::vec3(1.0, 1.0, 1.0);
@@ -517,6 +506,8 @@ int main() {
 		glBlitFramebuffer(0, 0, screen_width, screen_height, 0, 0, screen_width, screen_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		SDL_GL_SwapWindow(window);
+		//u32 post_render = SDL_GetTicks();
+		//printf("loop time: %u\n", post_render - pre_render);
 	}
 
 	SDL_Quit();

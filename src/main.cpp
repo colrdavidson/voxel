@@ -387,6 +387,7 @@ int main() {
 						memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
 						r_map = hull_map(map, r_map, map_width, map_height, map_depth);
 						update_map(model, tile_data, map_width, map_height, map_depth, top_layer, r_map);
+						clicked = true;
 					}
 				} break;
 				case SDL_QUIT: {

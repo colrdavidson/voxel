@@ -29,24 +29,42 @@ bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 
 
 bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, u32 i) {
 	Point p = oned_to_threed(i, map_width, map_height);
-    if (p.x == 0 || p.x == (map_width - 1) || p.y == (map_height - 1) || p.y == 0 || p.z == (map_depth - 1) || p.z == 0) {
-		return true;
-	} else {
-		if (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 ||
-			map[threed_to_oned(p.x - 1, p.y, p.z, map_width, map_height)] == 0 ||
-			map[threed_to_oned(p.x, p.y + 1, p.z, map_width, map_height)] == 0 ||
-			map[threed_to_oned(p.x, p.y - 1, p.z, map_width, map_height)] == 0 ||
-			map[threed_to_oned(p.x, p.y, p.z + 1, map_width, map_height)] == 0 ||
-			map[threed_to_oned(p.x, p.y, p.z - 1, map_width, map_height)] == 0) {
-			return true;
-		}
+
+	bool x_mod = false;
+	bool y_mod = false;
+	bool z_mod = false;
+
+	if (p.x == 0 || p.x == (map_width - 1)) {
+		x_mod = true;
 	}
+
+	if (p.y == 0 || p.y == (map_height - 1)) {
+		y_mod = true;
+	}
+
+	if (p.z == 0 || p.z == (map_depth - 1)) {
+		z_mod = true;
+	}
+
+	if (!x_mod && (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x - 1, p.y, p.z, map_width, map_height)] == 0)) {
+		return true;
+	}
+
+	if (!y_mod && (map[threed_to_oned(p.x, p.y + 1, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y - 1, p.z, map_width, map_height)] == 0)) {
+		return true;
+	}
+
+	if (!z_mod && (map[threed_to_oned(p.x, p.y, p.z + 1, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y, p.z - 1, map_width, map_height)] == 0)) {
+		return true;
+	}
+
 	return false;
 }
 
 
 
 RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_height, u32 map_depth) {
+	u32 start_time = SDL_GetTicks();
 	u32 map_size = map_height * map_width * map_depth;
 
 	if (r_map == NULL) {
@@ -67,6 +85,8 @@ RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_he
 
 	r_map->num_blocks = block_count;
 
+	u32 end_time = SDL_GetTicks();
+	printf("loop time: %u\n", end_time - start_time);
 	return r_map;
 }
 
@@ -199,9 +219,9 @@ int main() {
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	u32 map_width = 16 * 21;
+	u32 map_width = 16 * 64;
 	u32 map_height = 256;
-	u32 map_depth = 16 * 21;
+	u32 map_depth = 16 * 64;
 	u32 map_size = map_width * map_height * map_depth;
 	u32 top_layer = (map_height - 1) / 2;
 
@@ -331,10 +351,8 @@ int main() {
 					warp = true;
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-						u32 pos = threed_to_oned(hovered.x, hovered.y, hovered.z, map_width, map_height);
-
-						if (pos < map_size) {
-							map[pos] = 0;
+						if (inside_map(map_width, map_height, map_depth, hovered.x, hovered.y, hovered.z)) {
+							map[point_to_oned(hovered, map_width, map_height)] = 0;
 							memset(model, 0, sizeof(glm::vec3) * r_map->num_blocks);
 							memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
 							memset(colors, 0, sizeof(glm::vec3) * r_map->num_blocks);
@@ -344,7 +362,7 @@ int main() {
 
 							clicked = true;
 						} else {
-							printf("%u\n", pos);
+							printf("%u, %u, %u\n", hovered.x, hovered.y, hovered.z);
 						}
 					} else if (buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
 						i32 data = 0;
@@ -407,7 +425,6 @@ int main() {
 		}
 
 		if (clicked) {
-
 			i32 data = 0;
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
 			glReadBuffer(GL_COLOR_ATTACHMENT1);
@@ -419,12 +436,8 @@ int main() {
 			colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
 			hovered = p;
 			colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
-
-			clicked = false;
-
 		}
 
-		//u32 pre_render = SDL_GetTicks();
 		glEnable(GL_DEPTH_TEST);
 
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, frame_buffer);
@@ -481,6 +494,22 @@ int main() {
 		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, (r_map->num_blocks + 1)));
 
+		if (clicked) {
+			i32 data = 0;
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, frame_buffer);
+			glReadBuffer(GL_COLOR_ATTACHMENT1);
+			glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
+
+			u32 pos = (u32)data >> 3;
+			Point p = oned_to_threed(pos, map_width, map_height);
+
+			colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
+			hovered = p;
+			colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
+
+			clicked = false;
+		}
+
 		glDisable(GL_DEPTH_TEST);
 
         colors[0] = glm::vec3(1.0, 1.0, 1.0);
@@ -506,8 +535,6 @@ int main() {
 		glBlitFramebuffer(0, 0, screen_width, screen_height, 0, 0, screen_width, screen_height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		SDL_GL_SwapWindow(window);
-		//u32 post_render = SDL_GetTicks();
-		//printf("loop time: %u\n", post_render - pre_render);
 	}
 
 	SDL_Quit();

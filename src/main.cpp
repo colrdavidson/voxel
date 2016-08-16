@@ -6,6 +6,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+
+#define STB_PERLIN_IMPLEMENTATION
+#include "stb_perlin.h"
 
 #include "common.h"
 #include "point.h"
@@ -13,11 +17,72 @@
 #include "tga.h"
 #include "gl_helper.h"
 
+u8 *generate_map(u32 map_width, u32 map_height, u32 map_depth) {
+    u64 map_size = map_width * map_height * map_depth;
+
+	u8 *map = (u8 *)malloc(map_size);
+	memset(map, 0, map_size);
+
+	u8 *height_map = (u8 *)malloc(map_width * map_depth);
+
+	f32 min_height = map_height / 5;
+	f32 avg_height = map_height / 2;
+	for (u32 x = 0; x < map_width; x++) {
+		for (u32 z = 0; z < map_depth; z++) {
+
+			f32 column_height = avg_height;
+			for (u8 o = 5; o < 8; o++) {
+				f32 scale = (f32)(2 << o) * 1.01f;
+				column_height += (f32)(o << 3) * stb_perlin_noise3((f32)x / scale, (f32)z / scale, o * 2.0f, 256, 256, 256);
+			}
+
+			if (column_height > map_height) {
+				column_height = map_height;
+			}
+
+			if (column_height < min_height) {
+				column_height = min_height;
+			}
+
+			height_map[twod_to_oned(x, z, map_width)] = column_height;
+		}
+	}
+
+	/*Image img;
+	img.width = map_width;
+	img.height = map_depth;
+	img.data = height_map;
+	write_tga_bitmap("test.tga", &img);*/
+
+	for (u64 x = 0; x < map_width; x++) {
+		for (u64 z = 0; z < map_depth; z++) {
+			for (u64 y = 0; y < height_map[twod_to_oned(x, z, map_width)]; y++) {
+				if (y > (u64)((f32)map_height * 0.55)) {
+					map[threed_to_oned(x, y, z, map_width, map_height)] = 1;
+				} else {
+					map[threed_to_oned(x, y, z, map_width, map_height)] = 2;
+				}
+			}
+		}
+	}
+
+	return map;
+}
+
 typedef struct RenderableMap {
 	u8 *blocks;
 	u8 *ao_map;
 	u64 num_blocks;
 } RenderableMap;
+
+glm::vec3 random_color() {
+	f32 r = ((f32)(rand() % 10)) / 10;
+	f32 g = ((f32)(rand() % 10)) / 10;
+	f32 b = ((f32)(rand() % 10)) / 10;
+
+	glm::vec3 color = glm::vec3(r, g, b);
+	return color;
+}
 
 bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 z) {
 	if (x < map_width && y < map_height && z < map_depth) {
@@ -30,32 +95,24 @@ bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 
 bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, u32 i) {
 	Point p = oned_to_threed(i, map_width, map_height);
 
-	bool x_mod = false;
-	bool y_mod = false;
-	bool z_mod = false;
-
-	if (p.x == 0 || p.x == (map_width - 1)) {
-		x_mod = true;
+	if (!(p.x == 0 || p.x == (map_width - 1))) {
+		if (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x - 1, p.y, p.z, map_width, map_height)] == 0) {
+			return true;
+		}
 	}
 
-	if (p.y == 0 || p.y == (map_height - 1)) {
-		y_mod = true;
+
+	if (!(p.y == 0 || p.y == (map_height - 1))) {
+		if (map[threed_to_oned(p.x, p.y + 1, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y - 1, p.z, map_width, map_height)] == 0) {
+			return true;
+		}
 	}
 
-	if (p.z == 0 || p.z == (map_depth - 1)) {
-		z_mod = true;
-	}
 
-	if (!x_mod && (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x - 1, p.y, p.z, map_width, map_height)] == 0)) {
-		return true;
-	}
-
-	if (!y_mod && (map[threed_to_oned(p.x, p.y + 1, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y - 1, p.z, map_width, map_height)] == 0)) {
-		return true;
-	}
-
-	if (!z_mod && (map[threed_to_oned(p.x, p.y, p.z + 1, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y, p.z - 1, map_width, map_height)] == 0)) {
-		return true;
+	if (!(p.z == 0 || p.z == (map_depth - 1))) {
+		if (map[threed_to_oned(p.x, p.y, p.z + 1, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y, p.z - 1, map_width, map_height)] == 0) {
+			return true;
+		}
 	}
 
 	return false;
@@ -65,7 +122,7 @@ bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, u32 
 
 RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_height, u32 map_depth) {
 	u32 start_time = SDL_GetTicks();
-	u32 map_size = map_height * map_width * map_depth;
+	u64 map_size = map_height * map_width * map_depth;
 
 	if (r_map == NULL) {
 		r_map = (RenderableMap *)malloc(sizeof(RenderableMap));
@@ -75,9 +132,9 @@ RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_he
 	memset(r_map->blocks, 0, map_size);
 
 	u64 block_count = 0;
-	for (u32 i = 0; i < map_size; i++) {
-        if (map[i] == 1 && adjacent_to_air(map, map_width, map_height, map_depth, i)) {
-			r_map->blocks[i] = 1;
+	for (u64 i = 0; i < map_size; i++) {
+        if (map[i] != 0 && adjacent_to_air(map, map_width, map_height, map_depth, i)) {
+			r_map->blocks[i] = map[i];
 			block_count += 1;
 		}
 
@@ -86,14 +143,14 @@ RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_he
 	r_map->num_blocks = block_count;
 
 	u32 end_time = SDL_GetTicks();
-	printf("loop time: %u\n", end_time - start_time);
+	printf("%lu blocks in %u ms, %f bps\n", map_size, end_time - start_time, (f64)map_size / (f64)((end_time - start_time) / 1000.0f));
 	return r_map;
 }
 
-void update_map(glm::vec3 *model, i32 *tile_data, glm::vec3 *colors, u32 *mappings, u32 map_width, u32 map_height, u32 map_depth, u32 top_layer, RenderableMap *r_map) {
-	u32 map_size = map_height * map_width * map_depth;
+void update_map(glm::vec3 *model, i32 *tile_data, glm::vec3 *colors, u32 *mappings, u32 map_width, u32 map_height, u32 map_depth, RenderableMap *r_map, u8 *map) {
+	u64 map_size = map_height * map_width * map_depth;
 	u32 tile_index = 0;
-	for (u32 i = 0; i < map_size; i++) {
+	for (u64 i = 0; i < map_size; i++) {
 		u32 tile_id = r_map->blocks[i];
 		if (tile_id != 0) {
 			Point p = oned_to_threed(i, map_width, map_height);
@@ -103,13 +160,12 @@ void update_map(glm::vec3 *model, i32 *tile_data, glm::vec3 *colors, u32 *mappin
 			model[tile_index] = m;
 			tile_data[tile_index] = i;
 
-			if (p.y == top_layer) {
-				colors[tile_index] = glm::vec3(0.2, 0.7, 0.2);
-			} else if (p.y > top_layer) {
-				colors[tile_index] = glm::vec3(0.3, 0.3, 0.3);
+            if (map[i] == 1) {
+				colors[tile_index] = glm::vec3(0.2, 0.5, 0.2);
 			} else {
-				colors[tile_index] = glm::vec3(0.5, 0.35, 0.05);
+				colors[tile_index] = glm::vec3(0.0, 0.3, 0.0);
 			}
+
 
 			mappings[i] = tile_index;
 
@@ -126,8 +182,8 @@ int main() {
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-	i32 screen_width = 640;
-	i32 screen_height = 480;
+	i32 screen_width = 1280;
+	i32 screen_height = 720;
 
 	SDL_Window *window = SDL_CreateWindow("Voxel", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screen_width, screen_height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 	SDL_GLContext gl_context = SDL_GL_CreateContext(window);
@@ -136,6 +192,7 @@ int main() {
 
 	printf("GL version: %s\n", glGetString(GL_VERSION));
 	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+	srand(time(NULL));
 
 	GLuint obj_shader_program = load_and_build_program("src/obj_vert.vsh", "src/obj_frag.fsh");
 
@@ -219,21 +276,11 @@ int main() {
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	u32 map_width = 16 * 64;
+	u32 map_width = 16 * 21;
 	u32 map_height = 256;
-	u32 map_depth = 16 * 64;
-	u32 map_size = map_width * map_height * map_depth;
-	u32 top_layer = (map_height - 1) / 2;
-
-	u8 *map = (u8 *)malloc(map_size);
-	memset(map, 0, map_size);
-
-	for (u32 i = 0; i < map_size; i++) {
-		Point p = oned_to_threed(i, map_width, map_height);
-		if (p.y <= top_layer) {
-			map[i] = 1;
-		}
-	}
+	u32 map_depth = 16 * 21;
+	u64 map_size = map_width * map_height * map_depth;
+	u8 *map = generate_map(map_width, map_height, map_depth);
 
 	RenderableMap *r_map = hull_map(map, NULL, map_width, map_height, map_depth);
 
@@ -243,7 +290,7 @@ int main() {
 	u32 *mappings = (u32 *)malloc(sizeof(u32) * map_size);
 
 	Point hovered = new_point(0, 0, 0);
-	update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, top_layer, r_map);
+	update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, r_map, map);
 
 	GLuint vbo_model;
 	glGenBuffers(1, &vbo_model);
@@ -260,7 +307,7 @@ int main() {
 	f32 current_time = (f32)SDL_GetTicks() / 60.0;
 	f32 t = 0.0;
 
-	glm::vec3 camera_pos = glm::vec3(map_width / 2, top_layer + 3.0, map_depth / 2);
+	glm::vec3 camera_pos = glm::vec3(map_width / 2, map_height + 3.0, map_depth / 2);
 	glm::vec3 camera_front = glm::vec3(0.0, 0.0, 1.0);
 	glm::vec3 camera_up = glm::vec3(0.0, 1.0, 0.0);
 
@@ -283,7 +330,7 @@ int main() {
 		t += dt;
 
 		f32 saved_y = camera_pos.y;
-		f32 cam_speed = 0.5;
+		f32 cam_speed = 1.5;
 		SDL_PumpEvents();
 		const u8 *state = SDL_GetKeyboardState(NULL);
 		if (state[SDL_SCANCODE_W]) {
@@ -358,7 +405,7 @@ int main() {
 							memset(colors, 0, sizeof(glm::vec3) * r_map->num_blocks);
 							memset(mappings, 0, sizeof(u32) * map_size);
 							r_map = hull_map(map, r_map, map_width, map_height, map_depth);
-							update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, top_layer, r_map);
+							update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, r_map, map);
 
 							clicked = true;
 						} else {
@@ -413,7 +460,7 @@ int main() {
 							memset(colors, 0, sizeof(glm::vec3) * r_map->num_blocks);
 							memset(mappings, 0, sizeof(u32) * map_size);
 							r_map = hull_map(map, r_map, map_width, map_height, map_depth);
-							update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, top_layer, r_map);
+							update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, r_map, map);
 							clicked = true;
 						}
 					}
@@ -492,7 +539,7 @@ int main() {
 		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * r_map->num_blocks, model, GL_STREAM_DRAW);
 
 		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
-		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, (r_map->num_blocks + 1)));
+		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, r_map->num_blocks));
 
 		if (clicked) {
 			i32 data = 0;
@@ -513,7 +560,7 @@ int main() {
 		glDisable(GL_DEPTH_TEST);
 
         colors[0] = glm::vec3(1.0, 1.0, 1.0);
-		pv = glm::ortho(-50.0f, 50.0f, -50.0f, 50.0f, -1.0f, 1.0f);
+		pv = glm::ortho(-66.5f, 66.5f, -37.6f, 37.6f, -1.0f, 1.0f);
 
 		model[0] = glm::vec3(0.1, 0.0, 0.0);
 

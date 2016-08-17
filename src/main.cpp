@@ -17,59 +17,75 @@
 #include "tga.h"
 #include "gl_helper.h"
 
-u8 *generate_map(u32 map_width, u32 map_height, u32 map_depth) {
-    u64 map_size = map_width * map_height * map_depth;
+u32 chunk_width = 16;
+u32 chunk_height = 256;
+u32 chunk_depth = 16;
+u32 chunk_size = chunk_width * chunk_height * chunk_depth;
 
-	u8 *map = (u8 *)malloc(map_size);
-	memset(map, 0, map_size);
+typedef struct Chunk {
+	u8 *render_blocks;
+	u8 *real_blocks;
 
-	u8 *height_map = (u8 *)malloc(map_width * map_depth);
+	u32 *mappings;
+	u32 *tile_data;
+	glm::vec3 *positions;
+	glm::vec3 *colors;
 
-	f32 min_height = map_height / 5;
-	f32 avg_height = map_height / 2;
-	for (u32 x = 0; x < map_width; x++) {
-		for (u32 z = 0; z < map_depth; z++) {
+	u64 num_blocks;
+	u32 x_off;
+	u32 z_off;
+} Chunk;
+
+Chunk *generate_chunk(u32 x_off, u32 z_off) {
+	Chunk *chunk = (Chunk *)malloc(sizeof(Chunk));
+	chunk->real_blocks = (u8 *)malloc(chunk_size);
+	memset(chunk->real_blocks, 0, chunk_size);
+
+	chunk->positions = (glm::vec3 *)malloc(sizeof(glm::vec3) * chunk_size);
+	chunk->colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * chunk_size);
+	chunk->tile_data = (u32 *)malloc(sizeof(u32) * chunk_size);
+	chunk->mappings = (u32 *)malloc(sizeof(u32) * chunk_size);
+	chunk->render_blocks = (u8 *)malloc(chunk_size);
+	chunk->x_off = x_off * chunk_width;
+	chunk->z_off = z_off * chunk_depth;
+
+	u8 *height_map = (u8 *)malloc(chunk_width * chunk_depth);
+
+	f32 min_height = chunk_height / 5;
+	f32 avg_height = chunk_height / 2;
+	for (u32 x = 0; x < chunk_width; x++) {
+		for (u32 z = 0; z < chunk_depth; z++) {
 
 			f32 column_height = avg_height;
 			for (u8 o = 5; o < 8; o++) {
 				f32 scale = (f32)(2 << o) * 1.01f;
-				column_height += (f32)(o << 3) * stb_perlin_noise3((f32)x / scale, (f32)z / scale, o * 2.0f, 256, 256, 256);
+				column_height += (f32)(o << 3) * stb_perlin_noise3((f32)(x + chunk->x_off) / scale, (f32)(z + chunk->z_off) / scale, o * 2.0f, 256, 256, 256);
 			}
 
-			if (column_height > map_height) {
-				column_height = map_height;
+			if (column_height > chunk_height) {
+				column_height = chunk_height;
 			}
 
 			if (column_height < min_height) {
 				column_height = min_height;
 			}
 
-			height_map[twod_to_oned(x, z, map_width)] = column_height;
+			height_map[twod_to_oned(x, z, chunk_width)] = column_height;
 		}
 	}
 
-	/*Image img;
-	img.width = map_width;
-	img.height = map_depth;
-	img.data = height_map;
-	write_tga_bitmap("test.tga", &img);*/
-
-	for (u64 x = 0; x < map_width; x++) {
-		for (u64 z = 0; z < map_depth; z++) {
-			for (u64 y = 0; y < height_map[twod_to_oned(x, z, map_width)]; y++) {
-				map[threed_to_oned(x, y, z, map_width, map_height)] = height_map[twod_to_oned(x, z, map_width)];
+	for (u64 x = 0; x < chunk_width; x++) {
+		for (u64 z = 0; z < chunk_depth; z++) {
+			for (u64 y = 0; y < height_map[twod_to_oned(x, z, chunk_width)]; y++) {
+				chunk->real_blocks[threed_to_oned(x, y, z, chunk_width, chunk_height)] = height_map[twod_to_oned(x, z, chunk_width)];
 			}
 		}
 	}
 
-	return map;
+	free(height_map);
+	return chunk;
 }
 
-typedef struct RenderableMap {
-	u8 *blocks;
-	u8 *ao_map;
-	u64 num_blocks;
-} RenderableMap;
 
 glm::vec3 random_color() {
 	f32 r = ((f32)(rand() % 10)) / 10;
@@ -80,35 +96,41 @@ glm::vec3 random_color() {
 	return color;
 }
 
-bool inside_map(u32 map_width, u32 map_height, u32 map_depth, u32 x, u32 y, u32 z) {
-	if (x < map_width && y < map_height && z < map_depth) {
+bool inside_chunk(u32 x, u32 y, u32 z) {
+	if (x < chunk_width && y < chunk_height && z < chunk_depth) {
 		return true;
 	}
 
 	return false;
 }
 
-bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, u32 i) {
-	Point p = oned_to_threed(i, map_width, map_height);
+bool adjacent_to_air(u8 *chunk, u32 i) {
+	Point p = oned_to_threed(i, chunk_width, chunk_height);
 
-	if (!(p.x == 0 || p.x == (map_width - 1))) {
-		if (map[threed_to_oned(p.x + 1, p.y, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x - 1, p.y, p.z, map_width, map_height)] == 0) {
-			return true;
-		}
+	u8 x_edge = false;
+	u8 y_edge = false;
+	u8 z_edge = false;
+
+	if (p.x == 0 || p.x == (chunk_width - 1)) {
+		x_edge = true;
 	}
 
-
-	if (!(p.y == 0 || p.y == (map_height - 1))) {
-		if (map[threed_to_oned(p.x, p.y + 1, p.z, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y - 1, p.z, map_width, map_height)] == 0) {
-			return true;
-		}
+	if (p.y == 0 || p.y == (chunk_height - 1)) {
+		y_edge = true;
 	}
 
+	if (p.z == 0 || p.z == (chunk_depth - 1)) {
+		z_edge = true;
+	}
 
-	if (!(p.z == 0 || p.z == (map_depth - 1))) {
-		if (map[threed_to_oned(p.x, p.y, p.z + 1, map_width, map_height)] == 0 || map[threed_to_oned(p.x, p.y, p.z - 1, map_width, map_height)] == 0) {
-			return true;
-		}
+	if (!x_edge && (chunk[threed_to_oned(p.x + 1, p.y, p.z, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(p.x - 1, p.y, p.z, chunk_width, chunk_height)] == 0)) {
+		return true;
+	}
+	if (!y_edge && (chunk[threed_to_oned(p.x, p.y + 1, p.z, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(p.x, p.y - 1, p.z, chunk_width, chunk_height)] == 0)) {
+		return true;
+	}
+	if (!z_edge && (chunk[threed_to_oned(p.x, p.y, p.z + 1, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(p.x, p.y, p.z - 1, chunk_width, chunk_height)] == 0)) {
+		return true;
 	}
 
 	return false;
@@ -116,52 +138,43 @@ bool adjacent_to_air(u8 *map, u32 map_width, u32 map_height, u32 map_depth, u32 
 
 
 
-RenderableMap *hull_map(u8 *map, RenderableMap *r_map, u32 map_width, u32 map_height, u32 map_depth) {
-	u32 start_time = SDL_GetTicks();
-	u64 map_size = map_height * map_width * map_depth;
+void hull_chunk(Chunk *chunk) {
+	//u32 start_time = SDL_GetTicks();
 
-	if (r_map == NULL) {
-		r_map = (RenderableMap *)malloc(sizeof(RenderableMap));
-		r_map->blocks = (u8 *)malloc(map_size);
-	}
-
-	memset(r_map->blocks, 0, map_size);
+	memset(chunk->render_blocks, 0, chunk_size);
 
 	u64 block_count = 0;
-	for (u64 i = 0; i < map_size; i++) {
-        if (map[i] != 0 && adjacent_to_air(map, map_width, map_height, map_depth, i)) {
-			r_map->blocks[i] = map[i];
+	for (u64 i = 0; i < chunk_size; i++) {
+        if (chunk->real_blocks[i] != 0 && adjacent_to_air(chunk->real_blocks, i)) {
+			chunk->render_blocks[i] = chunk->real_blocks[i];
 			block_count += 1;
 		}
 
 	}
 
-	r_map->num_blocks = block_count;
+	chunk->num_blocks = block_count;
 
-	u32 end_time = SDL_GetTicks();
-	printf("%lu blocks in %u ms, %f bps\n", map_size, end_time - start_time, (f64)map_size / (f64)((end_time - start_time) / 1000.0f));
-	return r_map;
+	//u32 end_time = SDL_GetTicks();
+	//printf("%u blocks in %u ms, %f bps\n", chunk_size, end_time - start_time, (f64)chunk_size / (f64)((end_time - start_time) / 1000.0f));
 }
 
-void update_map(glm::vec3 *model, i32 *tile_data, glm::vec3 *colors, u32 *mappings, u32 map_width, u32 map_height, u32 map_depth, RenderableMap *r_map, u8 *map) {
-	u64 map_size = map_height * map_width * map_depth;
+void update_chunk(Chunk *chunk) {
 	u32 tile_index = 0;
-	for (u64 i = 0; i < map_size; i++) {
-		u32 tile_id = r_map->blocks[i];
+	for (u64 i = 0; i < chunk_size; i++) {
+		u32 tile_id = chunk->render_blocks[i];
 		if (tile_id != 0) {
-			Point p = oned_to_threed(i, map_width, map_height);
+			Point p = oned_to_threed(i, chunk_width, chunk_height);
 
-			glm::vec3 m = glm::vec3(p.x, p.y, p.z);
+			glm::vec3 m = glm::vec3(p.x + chunk->x_off, p.y, p.z + chunk->z_off);
 
-			model[tile_index] = m;
-			tile_data[tile_index] = i;
+			chunk->positions[tile_index] = m;
+			chunk->tile_data[tile_index] = threed_to_oned(p.x + chunk->x_off, p.y, p.z + chunk->z_off, chunk_width, chunk_height);
 
- 			f32 height_mult = ((f32)map[i] / 255.0f);
+ 			f32 height_mult = ((f32)chunk->real_blocks[i] / 255.0f);
 			height_mult *= height_mult;
-			colors[tile_index] = glm::vec3(0.1 * height_mult, 0.8 * height_mult, 0.1 * height_mult);
+			chunk->colors[tile_index] = glm::vec3(0.2 * height_mult, 0.8 * height_mult, 0.2 * height_mult);
 
-
-			mappings[i] = tile_index;
+			chunk->mappings[i] = tile_index;
 
 			tile_index++;
 		}
@@ -270,21 +283,20 @@ int main() {
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	u32 map_width = 16 * 21;
-	u32 map_height = 256;
-	u32 map_depth = 16 * 21;
-	u64 map_size = map_width * map_height * map_depth;
-	u8 *map = generate_map(map_width, map_height, map_depth);
-
-	RenderableMap *r_map = hull_map(map, NULL, map_width, map_height, map_depth);
-
-	glm::vec3 *model = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
-	glm::vec3 *colors = (glm::vec3 *)malloc(sizeof(glm::vec3) * map_size);
-	i32 *tile_data = (i32 *)malloc(sizeof(i32) * map_size);
-	u32 *mappings = (u32 *)malloc(sizeof(u32) * map_size);
+	u32 num_x_chunks = 21;
+	u32 num_y_chunks = 21;
+	u32 num_chunks = num_x_chunks * num_y_chunks;
+	Chunk **chunks = (Chunk **)malloc(sizeof(Chunk *) * num_chunks);
+	for (u32 x = 0; x < num_x_chunks; x++) {
+		for (u32 y = 0; y < num_y_chunks; y++) {
+			Chunk *chunk = generate_chunk(x, y);
+			hull_chunk(chunk);
+			update_chunk(chunk);
+			chunks[twod_to_oned(x, y, num_x_chunks)] = chunk;
+		}
+	}
 
 	Point hovered = new_point(0, 0, 0);
-	update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, r_map, map);
 
 	GLuint vbo_model;
 	glGenBuffers(1, &vbo_model);
@@ -301,7 +313,7 @@ int main() {
 	f32 current_time = (f32)SDL_GetTicks() / 60.0;
 	f32 t = 0.0;
 
-	glm::vec3 camera_pos = glm::vec3(map_width / 2, map_height + 3.0, map_depth / 2);
+	glm::vec3 camera_pos = glm::vec3(chunk_width / 2, chunk_height + 3.0, chunk_depth / 2);
 	glm::vec3 camera_front = glm::vec3(0.0, 0.0, 1.0);
 	glm::vec3 camera_up = glm::vec3(0.0, 1.0, 0.0);
 
@@ -392,15 +404,14 @@ int main() {
 					warp = true;
 
 					if (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) {
-						if (inside_map(map_width, map_height, map_depth, hovered.x, hovered.y, hovered.z)) {
-							map[point_to_oned(hovered, map_width, map_height)] = 0;
-							memset(model, 0, sizeof(glm::vec3) * r_map->num_blocks);
-							memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
-							memset(colors, 0, sizeof(glm::vec3) * r_map->num_blocks);
-							memset(mappings, 0, sizeof(u32) * map_size);
-							r_map = hull_map(map, r_map, map_width, map_height, map_depth);
-							update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, r_map, map);
-
+						if (inside_chunk(hovered.x, hovered.y, hovered.z)) {
+							chunks[0]->real_blocks[point_to_oned(hovered, chunk_width, chunk_height)] = 0;
+							memset(chunks[0]->positions, 0, sizeof(glm::vec3) * chunks[0]->num_blocks);
+							memset(chunks[0]->tile_data, 0, sizeof(u32) * chunks[0]->num_blocks);
+							memset(chunks[0]->colors, 0, sizeof(glm::vec3) * chunks[0]->num_blocks);
+							memset(chunks[0]->mappings, 0, sizeof(u32) * chunk_size);
+							hull_chunk(chunks[0]);
+							update_chunk(chunks[0]);
 							clicked = true;
 						} else {
 							printf("%u, %u, %u\n", hovered.x, hovered.y, hovered.z);
@@ -413,7 +424,7 @@ int main() {
 
 						u32 pos = (u32)data >> 3;
 						u8 side = ((u32)data << 29) >> 29;
-						Point p = oned_to_threed(pos, map_width, map_height);
+						Point p = oned_to_threed(pos, chunk_width, chunk_height);
 
 						i8 x_adj = 0;
 						i8 y_adj = 0;
@@ -447,14 +458,14 @@ int main() {
 						p.x += x_adj;
 						p.y += y_adj;
 						p.z += z_adj;
-                        if (inside_map(map_width, map_height, map_depth, p.x, p.y, p.z)) {
-							map[threed_to_oned(p.x, p.y, p.z, map_width, map_height)] = 1;
-							memset(model, 0, sizeof(glm::vec3) * r_map->num_blocks);
-							memset(tile_data, 0, sizeof(i32) * r_map->num_blocks);
-							memset(colors, 0, sizeof(glm::vec3) * r_map->num_blocks);
-							memset(mappings, 0, sizeof(u32) * map_size);
-							r_map = hull_map(map, r_map, map_width, map_height, map_depth);
-							update_map(model, tile_data, colors, mappings, map_width, map_height, map_depth, r_map, map);
+                        if (inside_chunk(p.x, p.y, p.z)) {
+							chunks[0]->real_blocks[threed_to_oned(p.x, p.y, p.z, chunk_width, chunk_height)] = 1;
+							memset(chunks[0]->positions, 0, sizeof(glm::vec3) * chunks[0]->num_blocks);
+							memset(chunks[0]->tile_data, 0, sizeof(i32) * chunks[0]->num_blocks);
+							memset(chunks[0]->colors, 0, sizeof(glm::vec3) * chunks[0]->num_blocks);
+							memset(chunks[0]->mappings, 0, sizeof(u32) * chunk_size);
+							hull_chunk(chunks[0]);
+							update_chunk(chunks[0]);
 							clicked = true;
 						}
 					}
@@ -472,11 +483,11 @@ int main() {
 			glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 			u32 pos = (u32)data >> 3;
-			Point p = oned_to_threed(pos, map_width, map_height);
+			Point p = oned_to_threed(pos, chunk_width, chunk_height);
 
-			colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
+			chunks[0]->colors[chunks[0]->mappings[point_to_oned(hovered, chunk_width, chunk_height)]] -= glm::vec3(0.1, 0.1, 0.1);
 			hovered = p;
-			colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
+			chunks[0]->colors[chunks[0]->mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
 		}
 
 		glEnable(GL_DEPTH_TEST);
@@ -522,18 +533,20 @@ int main() {
 		glm::mat4 view;
 		view = glm::lookAt(camera_pos, camera_pos + camera_front, camera_up);
 		glm::mat4 pv = perspective * view;
-
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * r_map->num_blocks, colors, GL_STREAM_DRAW);
-
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * r_map->num_blocks, tile_data, GL_STREAM_DRAW);
-
-		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * r_map->num_blocks, model, GL_STREAM_DRAW);
-
 		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
-		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, r_map->num_blocks));
+
+		for (u32 i = 0; i < num_chunks; i++) {
+			glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * chunks[i]->num_blocks, chunks[i]->colors, GL_STREAM_DRAW);
+
+			glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(i32) * chunks[i]->num_blocks, chunks[i]->tile_data, GL_STREAM_DRAW);
+
+			glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3) * chunks[i]->num_blocks, chunks[i]->positions, GL_STREAM_DRAW);
+
+			GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, chunks[i]->num_blocks));
+		}
 
 		if (clicked) {
 			i32 data = 0;
@@ -542,30 +555,30 @@ int main() {
 			glReadPixels(screen_width / 2, screen_height / 2, 1, 1, GL_RED_INTEGER, GL_INT, &data);
 
 			u32 pos = (u32)data >> 3;
-			Point p = oned_to_threed(pos, map_width, map_height);
+			Point p = oned_to_threed(pos, chunk_width, chunk_height);
 
-			colors[mappings[point_to_oned(hovered, map_width, map_height)]] -= glm::vec3(0.1, 0.1, 0.1);
+			chunks[0]->colors[chunks[0]->mappings[point_to_oned(hovered, chunk_width, chunk_height)]] -= glm::vec3(0.1, 0.1, 0.1);
 			hovered = p;
-			colors[mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
+			chunks[0]->colors[chunks[0]->mappings[pos]] += glm::vec3(0.1, 0.1, 0.1);
 
 			clicked = false;
 		}
 
 		glDisable(GL_DEPTH_TEST);
 
-        colors[0] = glm::vec3(1.0, 1.0, 1.0);
+        chunks[0]->colors[0] = glm::vec3(1.0, 1.0, 1.0);
 		pv = glm::ortho(-66.5f, 66.5f, -37.6f, 37.6f, -1.0f, 1.0f);
 
-		model[0] = glm::vec3(0.1, 0.0, 0.0);
+		chunks[0]->positions[0] = glm::vec3(0.1, 0.0, 0.0);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_color);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), colors, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), chunks[0]->colors, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_tile_data);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(i32), tile_data, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(i32), chunks[0]->tile_data, GL_STREAM_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, vbo_model);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), model, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), chunks[0]->positions, GL_STREAM_DRAW);
 
 		glUniformMatrix4fv(pv_uniform, 1, GL_FALSE, &pv[0][0]);
 		GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, size / sizeof(GLushort), GL_UNSIGNED_SHORT, 0, 1));

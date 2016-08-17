@@ -22,6 +22,10 @@ u32 chunk_height = 256;
 u32 chunk_depth = 16;
 u32 chunk_size = chunk_width * chunk_height * chunk_depth;
 
+u32 num_x_chunks = 3;
+u32 num_y_chunks = 3;
+u32 num_chunks = num_x_chunks * num_y_chunks;
+
 typedef struct Chunk {
 	u8 *render_blocks;
 	u8 *real_blocks;
@@ -104,61 +108,94 @@ bool inside_chunk(u32 x, u32 y, u32 z) {
 	return false;
 }
 
-bool adjacent_to_air(u8 *chunk, u32 i) {
-	Point p = oned_to_threed(i, chunk_width, chunk_height);
-
-	u8 x_edge = false;
-	u8 y_edge = false;
-	u8 z_edge = false;
-
-	if (p.x == 0 || p.x == (chunk_width - 1)) {
-		x_edge = true;
-	}
-
-	if (p.y == 0 || p.y == (chunk_height - 1)) {
-		y_edge = true;
-	}
-
-	if (p.z == 0 || p.z == (chunk_depth - 1)) {
-		z_edge = true;
-	}
-
-	if (!x_edge && (chunk[threed_to_oned(p.x + 1, p.y, p.z, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(p.x - 1, p.y, p.z, chunk_width, chunk_height)] == 0)) {
+bool is_edge(u8 *chunk, u32 x, u32 y, u32 z) {
+	if (x == 0 || x == (chunk_width - 1)) {
 		return true;
 	}
-	if (!y_edge && (chunk[threed_to_oned(p.x, p.y + 1, p.z, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(p.x, p.y - 1, p.z, chunk_width, chunk_height)] == 0)) {
+
+	if (y == 0 || y == (chunk_height - 1)) {
 		return true;
 	}
-	if (!z_edge && (chunk[threed_to_oned(p.x, p.y, p.z + 1, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(p.x, p.y, p.z - 1, chunk_width, chunk_height)] == 0)) {
+
+	if (z == 0 || z == (chunk_depth - 1)) {
 		return true;
 	}
 
 	return false;
 }
 
+bool is_x_edge(u8 *chunk, u32 x, u32 y, u32 z) {
+	if (x == 0 || x == (chunk_width - 1)) {
+		return true;
+	}
+	return false;
+}
 
+bool is_y_edge(u8 *chunk, u32 x, u32 y, u32 z) {
+	if (y == 0 || y == (chunk_height - 1)) {
+		return true;
+	}
+	return false;
+}
 
-void hull_chunk(Chunk *chunk) {
-	//u32 start_time = SDL_GetTicks();
+bool is_z_edge(u8 *chunk, u32 x, u32 y, u32 z) {
+	if (z == 0 || z == (chunk_depth - 1)) {
+		return true;
+	}
+	return false;
+}
 
+bool adjacent_to_air(u8 *chunk, u32 x, u32 y, u32 z) {
+	if ((chunk[threed_to_oned(x + 1, y, z, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(x - 1, y, z, chunk_width, chunk_height)] == 0)) {
+		return true;
+	}
+	if ((chunk[threed_to_oned(x, y + 1, z, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(x, y - 1, z, chunk_width, chunk_height)] == 0)) {
+		return true;
+	}
+	if ((chunk[threed_to_oned(x, y, z + 1, chunk_width, chunk_height)] == 0 || chunk[threed_to_oned(x, y, z - 1, chunk_width, chunk_height)] == 0)) {
+		return true;
+	}
+
+	return false;
+}
+
+void hull_chunk(Chunk **chunks, u32 chunk_idx) {
+	Chunk *chunk = chunks[chunk_idx];
 	memset(chunk->render_blocks, 0, chunk_size);
 
 	u64 block_count = 0;
 	for (u64 i = 0; i < chunk_size; i++) {
-        if (chunk->real_blocks[i] != 0 && adjacent_to_air(chunk->real_blocks, i)) {
-			chunk->render_blocks[i] = chunk->real_blocks[i];
-			block_count += 1;
+        if (chunk->real_blocks[i] != 0) {
+			Point p = oned_to_threed(i , chunk_width, chunk_height);
+			if (!is_edge(chunk->real_blocks, p.x, p.y, p.z)) {
+				if (adjacent_to_air(chunk->real_blocks, p.x, p.y, p.z)) {
+					chunk->render_blocks[i] = chunk->real_blocks[i];
+					block_count += 1;
+				}
+			} else {
+				// Verify Front and Side of stichable chunks
+				Point c_p = oned_to_twod(chunk_idx, num_x_chunks);
+				if (p.x == 0 && ((i32)c_p.x - 1) >= 0) {
+					Chunk *other_chunk = chunks[twod_to_oned(c_p.x - 1, c_p.y, num_x_chunks)];
+					if (chunk->real_blocks[threed_to_oned(p.x + 1, p.y, p.z, chunk_width, chunk_height)] == 0 ||
+						other_chunk->real_blocks[threed_to_oned(chunk_width - 1, p.y, p.z, chunk_width, chunk_height)] == 0) {
+						chunk->render_blocks[i] = chunk->real_blocks[i];
+						block_count += 1;
+						printf("(%d, %d, %d) -> (%d, %d, %d)\n", p.x, p.y, p.z, c_p.x, c_p.y, c_p.z);
+					}
+				}
+			}
 		}
 
 	}
 
 	chunk->num_blocks = block_count;
 
-	//u32 end_time = SDL_GetTicks();
-	//printf("%u blocks in %u ms, %f bps\n", chunk_size, end_time - start_time, (f64)chunk_size / (f64)((end_time - start_time) / 1000.0f));
 }
 
-void update_chunk(Chunk *chunk) {
+void update_chunk(Chunk **chunks, u32 chunk_idx) {
+	Chunk *chunk = chunks[chunk_idx];
+
 	u32 tile_index = 0;
 	for (u64 i = 0; i < chunk_size; i++) {
 		u32 tile_id = chunk->render_blocks[i];
@@ -283,18 +320,23 @@ int main() {
 
 	glViewport(0, 0, screen_width, screen_height);
 
-	u32 num_x_chunks = 21;
-	u32 num_y_chunks = 21;
-	u32 num_chunks = num_x_chunks * num_y_chunks;
+	u32 start_time = SDL_GetTicks();
+
 	Chunk **chunks = (Chunk **)malloc(sizeof(Chunk *) * num_chunks);
 	for (u32 x = 0; x < num_x_chunks; x++) {
 		for (u32 y = 0; y < num_y_chunks; y++) {
 			Chunk *chunk = generate_chunk(x, y);
-			hull_chunk(chunk);
-			update_chunk(chunk);
 			chunks[twod_to_oned(x, y, num_x_chunks)] = chunk;
 		}
 	}
+
+	for (u32 i = 0; i < num_chunks; i++) {
+		hull_chunk(chunks, i);
+		update_chunk(chunks, i);
+	}
+
+	u32 end_time = SDL_GetTicks();
+	printf("%u blocks in %u ms, %f bps\n", (chunk_size * num_chunks), end_time - start_time, (f64)(chunk_size * num_chunks) / (f64)((end_time - start_time) / 1000.0f));
 
 	Point hovered = new_point(0, 0, 0);
 
@@ -410,8 +452,8 @@ int main() {
 							memset(chunks[0]->tile_data, 0, sizeof(u32) * chunks[0]->num_blocks);
 							memset(chunks[0]->colors, 0, sizeof(glm::vec3) * chunks[0]->num_blocks);
 							memset(chunks[0]->mappings, 0, sizeof(u32) * chunk_size);
-							hull_chunk(chunks[0]);
-							update_chunk(chunks[0]);
+							hull_chunk(chunks, 0);
+							update_chunk(chunks, 0);
 							clicked = true;
 						} else {
 							printf("%u, %u, %u\n", hovered.x, hovered.y, hovered.z);
@@ -464,8 +506,8 @@ int main() {
 							memset(chunks[0]->tile_data, 0, sizeof(i32) * chunks[0]->num_blocks);
 							memset(chunks[0]->colors, 0, sizeof(glm::vec3) * chunks[0]->num_blocks);
 							memset(chunks[0]->mappings, 0, sizeof(u32) * chunk_size);
-							hull_chunk(chunks[0]);
-							update_chunk(chunks[0]);
+							hull_chunk(chunks, 0);
+							update_chunk(chunks, 0);
 							clicked = true;
 						}
 					}
@@ -529,7 +571,7 @@ int main() {
 
 
 		glm::mat4 perspective;
-		perspective = glm::perspective(glm::radians(45.0f), (f32)screen_width / (f32)screen_height, 0.1f, 500.0f);
+		perspective = glm::perspective(glm::radians(45.0f), (f32)screen_width / (f32)screen_height, 0.1f, 1000.0f);
 		glm::mat4 view;
 		view = glm::lookAt(camera_pos, camera_pos + camera_front, camera_up);
 		glm::mat4 pv = perspective * view;

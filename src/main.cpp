@@ -138,7 +138,6 @@ void hull_chunk(Chunk **chunks, u32 chunk_idx) {
 				if (chunk->real_blocks[i] < other_chunk->real_blocks[twod_to_oned(0, p.y, chunk_width)]) {
 					for (u32 dy = chunk->real_blocks[i]; dy < other_chunk->real_blocks[twod_to_oned(0, p.y, chunk_width)]; dy++) {
 						chunk->pre_render_list[threed_to_oned(p.x, dy, p.y, chunk_width, chunk_height)] = 6;
-						other_chunk->pre_render_list[threed_to_oned(p.x, dy, p.y, chunk_width, chunk_height)] = 6;
 					}
 				}
 			}

@@ -22,8 +22,8 @@ u32 chunk_height = 256;
 u32 chunk_depth = 16;
 u32 chunk_size = chunk_width * chunk_height * chunk_depth;
 
-u32 num_x_chunks = 21;
-u32 num_y_chunks = 21;
+u32 num_x_chunks = 9;
+u32 num_y_chunks = 9;
 u32 num_chunks = num_x_chunks * num_y_chunks;
 
 typedef struct Chunk {
@@ -75,6 +75,7 @@ Chunk *generate_chunk(u32 x_off, u32 z_off) {
 			height_map[twod_to_oned(x, z, chunk_width)] = column_height;
 		}
 	}
+
 
 	chunk->real_blocks = height_map;
 	return chunk;
@@ -135,32 +136,32 @@ void hull_chunk(Chunk **chunks, u32 chunk_idx) {
 			Point cp = oned_to_twod(chunk_idx, num_x_chunks);
 			if (p.x == chunk_width - 1 && cp.x < (num_x_chunks - 1)) {
 				Chunk *other_chunk = chunks[threed_to_oned(cp.x + 1, cp.y, cp.z, num_x_chunks, num_y_chunks)];
-				if (chunk->real_blocks[i] < other_chunk->real_blocks[twod_to_oned(0, p.y, chunk_width)]) {
-					for (u32 dy = chunk->real_blocks[i]; dy < other_chunk->real_blocks[twod_to_oned(0, p.y, chunk_width)]; dy++) {
+				if (chunk->real_blocks[i] > other_chunk->real_blocks[twod_to_oned(0, p.y, chunk_width)] + 1) {
+					for (u32 dy = chunk->real_blocks[i]; dy > other_chunk->real_blocks[twod_to_oned(0, p.y, chunk_width)]; dy--) {
 						chunk->pre_render_list[threed_to_oned(p.x, dy, p.y, chunk_width, chunk_height)] = 6;
 					}
 				}
 			}
 			if (p.x == 0 && cp.x > 0) {
 				Chunk *other_chunk = chunks[threed_to_oned(cp.x - 1, cp.y, cp.z, num_x_chunks, num_y_chunks)];
-				if (chunk->real_blocks[i] + 1 < other_chunk->real_blocks[twod_to_oned(chunk_width - 1, p.y, chunk_width)]) {
-					for (u32 dy = chunk->real_blocks[i] + 1; dy < other_chunk->real_blocks[twod_to_oned(chunk_width - 1, p.y, chunk_width)]; dy++) {
+				if (chunk->real_blocks[i] > other_chunk->real_blocks[twod_to_oned(chunk_width - 1, p.y, chunk_width)] + 1) {
+					for (u32 dy = chunk->real_blocks[i]; dy > other_chunk->real_blocks[twod_to_oned(chunk_width - 1, p.y, chunk_width)]; dy--) {
 						chunk->pre_render_list[threed_to_oned(p.x, dy, p.y, chunk_width, chunk_height)] = 7;
 					}
 				}
 			}
 			if (p.y == chunk_width - 1 && cp.y < (num_y_chunks - 1)) {
 				Chunk *other_chunk = chunks[threed_to_oned(cp.x, cp.y + 1, cp.z, num_x_chunks, num_y_chunks)];
-				if (chunk->real_blocks[i] + 1 < other_chunk->real_blocks[twod_to_oned(p.x, 0, chunk_width)]) {
-					for (u32 dy = chunk->real_blocks[i] + 1; dy < other_chunk->real_blocks[twod_to_oned(p.x, 0, chunk_width)]; dy++) {
+				if (chunk->real_blocks[i] > other_chunk->real_blocks[twod_to_oned(p.x, 0, chunk_width)] + 1) {
+					for (u32 dy = chunk->real_blocks[i]; dy > other_chunk->real_blocks[twod_to_oned(p.x, 0, chunk_width)]; dy--) {
 						chunk->pre_render_list[threed_to_oned(p.x, dy, p.y, chunk_width, chunk_height)] = 8;
 					}
 				}
 			}
 			if (p.y == 0 && cp.y > 0) {
 				Chunk *other_chunk = chunks[threed_to_oned(cp.x, cp.y - 1, cp.z, num_x_chunks, num_y_chunks)];
-				if (chunk->real_blocks[i] + 1 < other_chunk->real_blocks[twod_to_oned(p.x, chunk_depth - 1, chunk_width)]) {
-					for (u32 dy = chunk->real_blocks[i] + 1; dy < other_chunk->real_blocks[twod_to_oned(p.x, chunk_depth - 1, chunk_width)]; dy++) {
+				if (chunk->real_blocks[i] > other_chunk->real_blocks[twod_to_oned(p.x, chunk_depth - 1, chunk_width)] + 1) {
+					for (u32 dy = chunk->real_blocks[i]; dy > other_chunk->real_blocks[twod_to_oned(p.x, chunk_depth - 1, chunk_width)]; dy--) {
 						chunk->pre_render_list[threed_to_oned(p.x, dy, p.y, chunk_width, chunk_height)] = 9;
 					}
 				}
@@ -184,7 +185,7 @@ void update_chunk(Chunk **chunks, u32 chunk_idx) {
 			switch (chunk->pre_render_list[i]) {
 				case 1: {
 					//green
-					chunk->colors[tile_index] = glm::vec3(0.0, 1.0, 0.0);
+					chunk->colors[tile_index] = glm::vec3(0.0, 0.3, 0.0);
 				} break;
 				case 2: {
 					//blue
@@ -204,18 +205,18 @@ void update_chunk(Chunk **chunks, u32 chunk_idx) {
 				} break;
 				case 6: {
 					//red
-					chunk->colors[tile_index] = glm::vec3(0.2, 0.5, 0.7);
+					chunk->colors[tile_index] = glm::vec3(0.5, 1.0, 0.8);
 				} break;
 				case 7: {
-					//red
-					chunk->colors[tile_index] = glm::vec3(0.5, 0.5, 0.5);
+					//gray
+					chunk->colors[tile_index] = glm::vec3(0.255, 0.412, 0.88);
 				} break;
 				case 8: {
-					//red
+					//white
 					chunk->colors[tile_index] = glm::vec3(1.0, 1.0, 1.0);
 				} break;
 				case 9: {
-					//red
+					//magenta
 					chunk->colors[tile_index] = glm::vec3(0.9, 0.2, 0.5);
 				} break;
 			}
@@ -294,6 +295,12 @@ int main() {
 			chunks[twod_to_oned(x, y, num_x_chunks)] = chunk;
 		}
 	}
+
+	Image img;
+	img.width = chunk_width;
+	img.height = chunk_depth;
+	img.data = chunks[0]->real_blocks;
+	write_tga_bitmap("test.tga", &img);
 
 	u32 block_load = 0;
 	for (u32 i = 0; i < num_chunks; i++) {

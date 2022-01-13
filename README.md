@@ -1,5 +1,5 @@
 # Voxel
-A high-powered OpenGL voxel engine, almost suitable for miners.
+A voxel engine prototype for messing with various rendering techniques
 
 Voxel's build script is currently setup to build on OSX El Capitan.
 
